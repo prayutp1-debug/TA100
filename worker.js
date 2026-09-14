@@ -1,5 +1,17 @@
 /* worker.js — อ่านไฟล์ Excel และคำนวณคะแนนในเธรดแยก เพื่อไม่ให้หน้าเว็บค้าง */
-importScripts("vendor/xlsx.full.min.js", "engine.js");
+/* ตัวอ่าน Excel: ใช้ไฟล์ในโปรเจกต์ก่อน ถ้าไม่มีค่อยไป CDN สำรอง */
+var XLSX_SRCS = [
+  "vendor/xlsx.full.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js",
+  "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"
+];
+for (var si = 0; si < XLSX_SRCS.length; si++){
+  try { importScripts(XLSX_SRCS[si]); } catch (e) { continue; }
+  if (typeof XLSX !== "undefined") break;
+}
+if (typeof XLSX === "undefined")
+  throw new Error("โหลดตัวอ่าน Excel (SheetJS) ไม่ได้");
+importScripts("engine.js");
 
 var NEEDED = ["Punch", "จดทะเบียน", "การันตี", "เวลาทำงาน", "วันทำงาน", "คะแนน-Punch"];
 

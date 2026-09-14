@@ -240,16 +240,45 @@ function computeFrom(source){
   });
 }
 let xlsxLoaded = null;
-function loadXLSX(){
-  if (xlsxLoaded) return xlsxLoaded;
-  xlsxLoaded = new Promise((ok,no)=>{
+const XLSX_SRCS = [
+  "vendor/xlsx.full.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js",
+  "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"
+];
+function loadScript(src){
+  return new Promise((ok,no)=>{
     const s = document.createElement("script");
-    s.src = "vendor/xlsx.full.min.js"; s.onload = ok;
-    s.onerror = ()=>no(new Error("โหลด vendor/xlsx.full.min.js ไม่ได้"));
+    s.src = src; s.onload = ok; s.onerror = ()=>no(new Error(src));
     document.head.appendChild(s);
   });
+}
+function loadXLSX(){
+  if (xlsxLoaded) return xlsxLoaded;
+  xlsxLoaded = (async ()=>{
+    for (let i=0; i<XLSX_SRCS.length; i++){
+      try {
+        if (i) stage("ไฟล์ vendor ไม่พบ — กำลังโหลดตัวอ่าน Excel สำรอง", .1);
+        await loadScript(XLSX_SRCS[i]);
+        if (typeof XLSX !== "undefined") return;
+      } catch(e){ /* ลองแหล่งถัดไป */ }
+    }
+    throw new Error("โหลดตัวอ่าน Excel (SheetJS) ไม่ได้");
+  })();
   return xlsxLoaded;
 }
+
+/* ตรวจว่าไฟล์ในโปรเจกต์ครบไหม — ใช้ตอนเกิดปัญหา */
+async function diagnose(){
+  const files = ["engine.js","worker.js","vendor/xlsx.full.min.js", XLSX_URL];
+  const out = [];
+  for (const f of files){
+    let ok = false;
+    try { const r = await fetch(f,{method:"HEAD",cache:"no-cache"}); ok = r.ok; } catch(e){}
+    out.push(`<div>${ok?"✓":"✗"} <code>${esc(f)}</code>${ok?"":" — ไม่พบไฟล์นี้"}</div>`);
+  }
+  return out.join("");
+}
+
 async function computeMain(source){
   stage("กำลังเตรียมตัวอ่าน Excel", .08);
   await loadXLSX();
@@ -315,12 +344,17 @@ async function load(opts){
     if (key) cachePut(key, db).catch(()=>{});
     boot(db, false);
   } catch(e){
-    const local = location.protocol === "file:";
-    fail(e.message, local
-      ? "หน้านี้ถูกเปิดแบบ <code>file://</code> ซึ่งเบราว์เซอร์จะบล็อกการอ่านไฟล์ข้างเคียง — "+
-        "ให้เปิดผ่าน GitHub Pages หรือรัน <code>python -m http.server</code> ในโฟลเดอร์นี้"
-      : "ตรวจว่ามีไฟล์ <code>"+esc(XLSX_URL)+"</code> อยู่ใน repo และมีชีต Punch, จดทะเบียน, "+
-        "การันตี, เวลาทำงาน, วันทำงาน, คะแนน-Punch ครบ");
+    if (location.protocol === "file:"){
+      fail(e.message,
+        "หน้านี้ถูกเปิดแบบ <code>file://</code> ซึ่งเบราว์เซอร์จะบล็อกการอ่านไฟล์ข้างเคียง — " +
+        "ให้เปิดผ่าน GitHub Pages หรือรัน <code>python -m http.server</code> ในโฟลเดอร์นี้");
+    } else {
+      fail(e.message, "กำลังตรวจไฟล์ในโปรเจกต์…");
+      const list = await diagnose();
+      const box = $("#ld-fail").querySelector(".fail");
+      if (box) box.innerHTML = `<b>${esc(e.message)}</b><br><br>ไฟล์ในโปรเจกต์:<br>${list}` +
+        `<br>อัปไฟล์ที่ขาดขึ้น repo ให้ครบตามโครงสร้างในไฟล์ README แล้วลองใหม่`;
+    }
   }
 }
 
