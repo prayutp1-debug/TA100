@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TA รถโม่ — คะแนนวันทำงานและรางวัล</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#151d28; --ink-2:#4a5769; --ink-3:#7c8899;
+  --paper:#e8e9e6; --card:#fff; --rule:#d6dae0; --rule-2:#eceef1;
+  --band:#1b2430; --band-2:#2b3849;
+  --signal:#f0b429; --link:#1d5fa8;
+  --s100:#bfe3c0; --s75:#e4efb4; --s50:#fde9a9; --s25:#fbcf9c; --s0:#f4a9a4;
+  --neg:#c0392b; --pos:#1f7a4d;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:'IBM Plex Sans Thai',Sarabun,Tahoma,sans-serif;
+  background:var(--paper); color:var(--ink);
+  font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
+}
+button,input,select{font:inherit;color:inherit}
+.num{font-variant-numeric:tabular-nums}
+
+/* ── ส่วนหัว ───────────────────────────────────────── */
+header{background:var(--band);color:#fff;padding:18px 22px 0}
+.hd-top{display:flex;flex-wrap:wrap;align-items:baseline;gap:14px;max-width:1680px;margin:0 auto}
+.hd-top h1{margin:0;font-size:21px;font-weight:600;letter-spacing:-.2px}
+.hd-top .per{color:var(--signal);font-weight:600;font-size:15px}
+.hd-top .meta{color:#93a1b5;font-size:12.5px;margin-left:auto;text-align:right}
+.kpis{display:flex;flex-wrap:wrap;gap:1px;background:var(--band-2);
+  max-width:1680px;margin:16px auto 0;border-radius:5px 5px 0 0;overflow:hidden}
+.kpi{background:var(--band);padding:11px 16px;flex:1 1 150px}
+.kpi b{display:block;font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
+.kpi span{font-size:11.5px;color:#93a1b5}
+nav{display:flex;gap:0;max-width:1680px;margin:0 auto;overflow-x:auto}
+nav button{background:none;border:0;border-bottom:3px solid transparent;color:#a8b4c5;
+  padding:12px 15px;cursor:pointer;white-space:nowrap;font-size:13.5px}
+nav button:hover{color:#fff}
+nav button[aria-selected=true]{color:#fff;border-bottom-color:var(--signal);font-weight:600}
+nav button:focus-visible{outline:2px solid var(--signal);outline-offset:-4px}
+
+/* ── ตัวกรอง ───────────────────────────────────────── */
+.wrap{max-width:1680px;margin:0 auto;padding:16px 22px 60px}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;
+  background:var(--card);border:1px solid var(--rule);border-radius:6px;padding:11px 13px;margin-bottom:14px}
+.f{display:flex;flex-direction:column;gap:3px;min-width:0}
+.f label{font-size:11px;color:var(--ink-3)}
+.f select,.f input{padding:6px 8px;border:1px solid var(--rule);border-radius:4px;background:#fff;max-width:190px}
+.f select:focus,.f input:focus{outline:2px solid var(--link);outline-offset:-1px;border-color:var(--link)}
+.btn{padding:7px 13px;border:1px solid var(--rule);background:#fff;border-radius:4px;cursor:pointer}
+.btn:hover{background:#f4f5f7;border-color:var(--ink-3)}
+.btn.primary{background:var(--band);color:#fff;border-color:var(--band)}
+.btn.primary:hover{background:var(--band-2)}
+.spacer{margin-left:auto}
+.hint{font-size:12px;color:var(--ink-2);margin:0 0 12px}
+
+/* ── ตาราง ─────────────────────────────────────────── */
+.panel{background:var(--card);border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+.panel-hd{display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+  padding:10px 13px;border-bottom:1px solid var(--rule);background:#fafbfc}
+.panel-hd h2{margin:0;font-size:14.5px;font-weight:600}
+.panel-hd .sub{font-size:12px;color:var(--ink-3)}
+.scroll{overflow:auto;max-height:calc(100vh - 300px)}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
+th,td{padding:5px 8px;border-bottom:1px solid var(--rule-2);white-space:nowrap;text-align:left}
+thead th{position:sticky;top:0;z-index:3;background:var(--band);color:#fff;
+  font-weight:500;font-size:11.5px;border-bottom:1px solid var(--band)}
+thead tr:nth-child(2) th{top:26px}
+th.sortable{cursor:pointer;user-select:none}
+th.sortable:hover{background:var(--band-2)}
+th.sortable::after{content:'';opacity:.45;margin-left:4px}
+th.sortable[data-dir="1"]::after{content:'▲'}
+th.sortable[data-dir="-1"]::after{content:'▼'}
+tbody tr:hover td{background:#f4f8fd}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+td.c,th.c{text-align:center}
+.sticky-l{position:sticky;left:0;background:#fff;z-index:2;border-right:1px solid var(--rule)}
+thead .sticky-l{background:var(--band);z-index:4}
+tbody tr:hover .sticky-l{background:#f4f8fd}
+.truck{font-weight:600}
+.muted{color:var(--ink-3)}
+.trunc{max-width:150px;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:bottom}
+.neg{color:var(--neg)} .pos{color:var(--pos)}
+
+/* คะแนนในตาราง */
+.d{text-align:center;font-variant-numeric:tabular-nums;min-width:32px;padding:4px 3px}
+.v100{background:var(--s100)} .v75{background:var(--s75)} .v50{background:var(--s50)}
+.v25{background:var(--s25)} .v0{background:var(--s0)}
+.mk{position:relative}
+.mk::after{content:'';position:absolute;top:1px;right:1px;border:3px solid transparent;
+  border-top-color:var(--band);border-right-color:var(--band)}
+
+.tier{display:inline-block;padding:1px 7px;border-radius:3px;font-size:11.5px;font-weight:600}
+.t1{background:#d3ecd6;color:#1c6b39} .t2{background:#e2f0c8;color:#4a6b14}
+.t3{background:#fdeeb8;color:#7a5a06} .t4{background:#e7eaef;color:#495568}
+.t5{background:#fbd7c6;color:#9c4210} .t6{background:#f7c2be;color:#9b241a}
+
+.pager{display:flex;gap:8px;align-items:center;padding:9px 13px;border-top:1px solid var(--rule);
+  background:#fafbfc;font-size:12.5px;flex-wrap:wrap}
+
+/* ── ภาพรวม ────────────────────────────────────────── */
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
+.bar-row{display:grid;grid-template-columns:58px 1fr 96px;gap:9px;align-items:center;margin-bottom:6px}
+.bar{height:17px;background:var(--rule-2);border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--ink-2);padding:9px 13px}
+.legend span{display:flex;align-items:center;gap:5px}
+.sw{width:15px;height:15px;border-radius:2px;border:1px solid rgba(0,0,0,.08)}
+.note{background:#fff8e6;border:1px solid #f0dca4;border-radius:5px;padding:10px 13px;font-size:12.5px;margin-bottom:14px}
+.note b{color:#8a5d00}
+.note ul{margin:6px 0 0;padding-left:18px} .note li{margin:2px 0}
+.loading{padding:50px;text-align:center;color:var(--ink-3)}
+.hd-actions{display:flex;gap:7px;margin-top:6px;justify-content:flex-end}
+.hd-actions button{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.2);
+  color:#dfe6ef;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer}
+.hd-actions button:hover{background:rgba(255,255,255,.18);color:#fff}
+.overlay{position:fixed;inset:0;background:rgba(232,233,230,.96);z-index:99;
+  display:flex;align-items:center;justify-content:center;padding:24px}
+.loader{background:var(--card);border:1px solid var(--rule);border-radius:8px;
+  padding:26px 28px;max-width:440px;width:100%;box-shadow:0 8px 28px rgba(20,30,45,.13)}
+.loader h3{margin:0 0 4px;font-size:16px;font-weight:600}
+.loader p{margin:0 0 16px;font-size:12.5px;color:var(--ink-3)}
+.prog{height:6px;background:var(--rule-2);border-radius:3px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--band);width:0;
+  transition:width .35s ease}
+.stage{margin-top:9px;font-size:12.5px;color:var(--ink-2);
+  display:flex;justify-content:space-between;gap:10px}
+.loader .fail{background:#fdeceb;border:1px solid #f0b7b2;border-radius:5px;
+  padding:10px 12px;font-size:12.5px;margin-top:14px;color:#8c2a20}
+.loader .row{display:flex;gap:8px;margin-top:14px}
+.empty{padding:40px;text-align:center;color:var(--ink-3)}
+@media print{header,nav,.filters,.pager{display:none}.scroll{max-height:none;overflow:visible}}
+@media (max-width:640px){.wrap{padding:12px}.hd-top .meta{margin-left:0;text-align:left}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hd-top">
+    <h1>TA รถโม่ — คะแนนวันทำงานและรางวัล</h1>
+    <div class="per" id="period">กำลังโหลด…</div>
+    <div class="meta" id="meta"></div>
+  </div>
+  <div class="hd-actions" id="hd-actions" hidden>
+    <button id="btn-reload" title="อ่านไฟล์ Excel จาก GitHub ใหม่ ไม่ใช้ข้อมูลที่จำไว้">โหลดข้อมูลใหม่</button>
+    <button id="btn-pick" title="ทดลองกับไฟล์ในเครื่องก่อนอัปขึ้น GitHub">ใช้ไฟล์ Excel อื่น</button>
+    <input type="file" id="file-input" accept=".xlsx,.xlsm" hidden>
+  </div>
+  <div class="kpis" id="kpis"></div>
+  <nav id="tabs" role="tablist"></nav>
+</header>
+
+<div class="wrap">
+  <div class="filters" id="filters" hidden></div>
+  <div id="view"></div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="loader">
+    <h3 id="ld-title">กำลังเตรียมข้อมูล</h3>
+    <p id="ld-sub">อ่านไฟล์ Excel จาก GitHub แล้วคำนวณคะแนนในเบราว์เซอร์</p>
+    <div class="prog"><i id="ld-bar"></i></div>
+    <div class="stage"><span id="ld-stage">เริ่มต้น…</span><span class="num" id="ld-pct"></span></div>
+    <div id="ld-fail"></div>
+  </div>
+</div>
+
+<script src="engine.js"></script>
+<script>
+"use strict";
+const XLSX_URL = "data/TA100.xlsx";   // ฐานข้อมูล — เปลี่ยนเดือนใหม่แค่แทนที่ไฟล์นี้
+let D = null, DETAIL = null, TAB = "overview", SRC = {};
+const F = {division:"",dept:"",sect:"",plant:"",vendor:"",tier:"",q:""};
+const PAGE = {overview:1,score:1,reward:1,fine:1,detail:1};
+const SORT = {score:{k:"truck",d:1},reward:{k:"net",d:-1},fine:{k:"total",d:-1},detail:{k:"day",d:1}};
+const PER = {score:60,reward:80,fine:60,detail:200};
+const $ = s => document.querySelector(s);
+const el = (t,c,x) => {const e=document.createElement(t); if(c)e.className=c; if(x!=null)e.textContent=x; return e;};
+const nf = (v,d=2) => (v==null||isNaN(v))?"":Number(v).toLocaleString("th-TH",{minimumFractionDigits:d,maximumFractionDigits:d});
+const n0 = v => nf(v,0);
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ── จำผลคำนวณไว้ใน IndexedDB เพื่อให้เปิดครั้งต่อไปทันที ── */
+const DB_NAME = "ta-dashboard", STORE = "cache";
+function idb(){
+  return new Promise((ok,no)=>{
+    const r = indexedDB.open(DB_NAME,1);
+    r.onupgradeneeded = ()=>r.result.createObjectStore(STORE);
+    r.onsuccess = ()=>ok(r.result); r.onerror = ()=>no(r.error);
+  });
+}
+function idbOp(mode, fn){
+  return idb().then(db=>new Promise((ok,no)=>{
+    const tx = db.transaction(STORE,mode), rq = fn(tx.objectStore(STORE));
+    rq.onsuccess = ()=>ok(rq.result); rq.onerror = ()=>no(rq.error);
+  }));
+}
+const cacheGet = k => idbOp("readonly", st=>st.get(k));
+const cachePut = (k,v) => idbOp("readwrite", st=>{ st.clear(); return st.put(v,k); });
+
+/* ── ตัวแสดงความคืบหน้า ── */
+function stage(text, pct){
+  $("#ld-stage").textContent = text;
+  $("#ld-bar").style.width = Math.round(pct*100)+"%";
+  $("#ld-pct").textContent = Math.round(pct*100)+"%";
+}
+function fail(msg, hint){
+  $("#ld-title").textContent = "เปิดฐานข้อมูลไม่ได้";
+  $("#ld-sub").textContent = "";
+  $("#ld-bar").parentElement.hidden = true;
+  $("#ld-stage").textContent = "";
+  $("#ld-fail").innerHTML = `<div class="fail"><b>${esc(msg)}</b>${hint?"<br><br>"+hint:""}</div>` +
+    `<div class="row"><button class="btn" onclick="location.reload()">ลองใหม่</button>` +
+    `<button class="btn primary" id="ld-pick">เลือกไฟล์ Excel จากเครื่อง</button></div>`;
+  $("#ld-pick").onclick = ()=>$("#file-input").click();
+}
+
+/* ── คำนวณจากไฟล์ Excel (ใช้ Worker ถ้ามี) ── */
+function computeFrom(source){
+  return new Promise((ok,no)=>{
+    if (window.Worker){
+      let w;
+      try { w = new Worker("worker.js"); }
+      catch(e){ return computeMain(source).then(ok,no); }
+      w.onmessage = e=>{
+        const m = e.data;
+        if (m.type === "progress") stage(m.stage, 0.05 + m.pct*0.9);
+        else if (m.type === "done"){ w.terminate(); ok(m.db); }
+        else if (m.type === "error"){ w.terminate(); no(new Error(m.message)); }
+      };
+      w.onerror = ()=>{ w.terminate(); computeMain(source).then(ok,no); };
+      source.buffer ? w.postMessage({buffer:source.buffer},[source.buffer])
+                    : w.postMessage({url:source.url});
+    } else computeMain(source).then(ok,no);
+  });
+}
+let xlsxLoaded = null;
+function loadXLSX(){
+  if (xlsxLoaded) return xlsxLoaded;
+  xlsxLoaded = new Promise((ok,no)=>{
+    const s = document.createElement("script");
+    s.src = "vendor/xlsx.full.min.js"; s.onload = ok;
+    s.onerror = ()=>no(new Error("โหลด vendor/xlsx.full.min.js ไม่ได้"));
+    document.head.appendChild(s);
+  });
+  return xlsxLoaded;
+}
+async function computeMain(source){
+  stage("กำลังเตรียมตัวอ่าน Excel", .08);
+  await loadXLSX();
+  let buf = source.buffer;
+  if (!buf){
+    stage("กำลังดาวน์โหลดไฟล์ Excel", .12);
+    const r = await fetch(source.url);
+    if (!r.ok) throw new Error("โหลดไฟล์ไม่ได้ (HTTP "+r.status+")");
+    buf = await r.arrayBuffer();
+  }
+  stage("กำลังเปิดไฟล์ Excel", .2);
+  await new Promise(r=>setTimeout(r,30));
+  const wb = XLSX.read(new Uint8Array(buf), {type:"array", cellDates:false});
+  const NEEDED = ["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch"];
+  const miss = NEEDED.filter(n=>wb.SheetNames.indexOf(n)<0);
+  if (miss.length) throw new Error("ไฟล์ Excel ไม่มีชีต: "+miss.join(", "));
+  stage("กำลังอ่านข้อมูล", .3);
+  await new Promise(r=>setTimeout(r,30));
+  const sheets = {};
+  NEEDED.forEach(n=>{
+    sheets[n] = (n === "เวลาทำงาน")
+      ? XLSX.utils.sheet_to_json(wb.Sheets[n], {header:1, raw:true, defval:null})
+      : XLSX.utils.sheet_to_json(wb.Sheets[n], {raw:true, defval:null});
+  });
+  return buildDB(sheets, (t,p)=>stage(t, .3 + p*.65));
+}
+
+/* ── ขั้นตอนโหลดข้อมูล ── */
+async function load(opts){
+  opts = opts || {};
+  $("#overlay").hidden = false;
+  $("#ld-fail").innerHTML = ""; $("#ld-bar").parentElement.hidden = false;
+  $("#ld-title").textContent = "กำลังเตรียมข้อมูล";
+  stage("เริ่มต้น…", .02);
+
+  let key = null;
+  if (!opts.file){
+    try {
+      const h = await fetch(XLSX_URL, {method:"HEAD", cache:"no-cache"});
+      if (h.ok){
+        const et = h.headers.get("etag")||"", lm = h.headers.get("last-modified")||"",
+              len = h.headers.get("content-length")||"";
+        SRC = {name: XLSX_URL.split("/").pop(), updated: lm, size: +len||0};
+        key = [et,lm,len,"v"+ENGINE_VERSION].join("|");
+      }
+    } catch(e){ /* บางที่ไม่รองรับ HEAD — ข้ามการใช้ cache ไป */ }
+
+    if (key && !opts.force){
+      stage("อ่านข้อมูลที่จำไว้", .1);
+      try {
+        const hit = await cacheGet(key);
+        if (hit){ boot(hit, true); return; }
+      } catch(e){}
+    }
+  } else {
+    SRC = {name: opts.file.name, updated: new Date(opts.file.lastModified).toUTCString(),
+           size: opts.file.size, local: true};
+  }
+
+  try {
+    const src = opts.file ? {buffer: await opts.file.arrayBuffer()} : {url: XLSX_URL};
+    const db = await computeFrom(src);
+    if (key) cachePut(key, db).catch(()=>{});
+    boot(db, false);
+  } catch(e){
+    const local = location.protocol === "file:";
+    fail(e.message, local
+      ? "หน้านี้ถูกเปิดแบบ <code>file://</code> ซึ่งเบราว์เซอร์จะบล็อกการอ่านไฟล์ข้างเคียง — "+
+        "ให้เปิดผ่าน GitHub Pages หรือรัน <code>python -m http.server</code> ในโฟลเดอร์นี้"
+      : "ตรวจว่ามีไฟล์ <code>"+esc(XLSX_URL)+"</code> อยู่ใน repo และมีชีต Punch, จดทะเบียน, "+
+        "การันตี, เวลาทำงาน, วันทำงาน, คะแนน-Punch ครบ");
+  }
+}
+
+const TABS = [
+  ["overview","ภาพรวม"],["score","คะแนนรายวัน"],["reward","คำนวณรางวัล"],
+  ["fine","หักเงิน จบส."],["detail","รายละเอียด Punch"],["rules","เกณฑ์คะแนน"]
+];
+
+function boot(db, cached){
+  const first = !D;
+  D = db;
+  DETAIL = D.detail;
+  DETAIL.idx = {}; DETAIL.cols.forEach((c,i)=>DETAIL.idx[c]=i);
+  DETAIL.org = {}; D.trucks.forEach(t=>DETAIL.org[t.truck]=t);
+  $("#overlay").hidden = true;
+  $("#hd-actions").hidden = false;
+  if (first){
+    $("#btn-reload").onclick = ()=>load({force:true});
+    $("#btn-pick").onclick = ()=>$("#file-input").click();
+    $("#file-input").onchange = e=>{ if(e.target.files[0]) load({file:e.target.files[0]}); };
+  }
+  const m = D.meta;
+  $("#period").textContent = `${m.month_en} ${m.year} · วันทำงาน ${m.work_days} วัน`;
+  const upd = SRC.updated ? new Date(SRC.updated) : null;
+  $("#meta").innerHTML =
+    `ที่มา ${esc(SRC.name||"TA100.xlsx")}${SRC.local?" (ไฟล์ในเครื่อง)":""} · ${n0(m.punch_rows)} แถว Punch<br>` +
+    (upd && !isNaN(upd) ? `ไฟล์อัปเดต ${upd.toLocaleString("th-TH")}` : "") +
+    (cached ? " · ใช้ข้อมูลที่จำไว้" : "");
+
+  const t = D.trucks, tot = a=>t.reduce((s,x)=>s+x[a],0);
+  kpi([
+    [n0(t.length),"รถที่มีการ Punch"],
+    [n0(D.drivers.length),"คนขับ"],
+    [nf(t.reduce((s,x)=>s+x.pct,0)/t.length,1)+"%","%TA เฉลี่ย"],
+    [n0(t.filter(x=>x.tier==="TA 1").length),"รถกลุ่ม TA 1"],
+    [n0(tot("qty")),"คิวรวม"],
+    [n0(tot("incentive")),"เงินรางวัล (บาท)"],
+    [n0(tot("g_topup")),"ส่วนต่างการันตี (บาท)"],
+    [n0(tot("net")),"รางวัลสุทธิ (บาท)"]
+  ]);
+
+  const nav = $("#tabs");
+  nav.innerHTML = "";
+  TABS.forEach(([id,label])=>{
+    const b = el("button",null,label);
+    b.setAttribute("role","tab"); b.dataset.tab=id;
+    b.onclick = ()=>{ TAB=id; render(); };
+    nav.appendChild(b);
+  });
+  if (first) buildFilters(); else { Object.keys(F).forEach(k=>F[k]=""); syncFilters(); }
+  resetPages();
+  render();
+}
+
+function kpi(items){
+  $("#kpis").innerHTML = items.map(([v,l])=>
+    `<div class="kpi"><b>${v}</b><span>${esc(l)}</span></div>`).join("");
+}
+
+/* ── ตัวกรองแบบลดหลั่น ────────────────────────────── */
+function buildFilters(){
+  const f = $("#filters"); f.hidden=false;
+  f.innerHTML = `
+    <div class="f"><label for="f-division">กิจการ</label><select id="f-division"></select></div>
+    <div class="f"><label for="f-dept">ภาค</label><select id="f-dept"></select></div>
+    <div class="f"><label for="f-sect">แผนก</label><select id="f-sect"></select></div>
+    <div class="f"><label for="f-plant">โรงงาน</label><select id="f-plant"></select></div>
+    <div class="f"><label for="f-vendor">ผู้รับเหมา</label><select id="f-vendor"></select></div>
+    <div class="f"><label for="f-tier">กลุ่ม TA</label><select id="f-tier"></select></div>
+    <div class="f"><label for="f-q">ค้นหาเบอร์รถ / คนขับ</label><input id="f-q" type="search" placeholder="เช่น 0018 หรือ ON0447"></div>
+    <div class="spacer"></div>
+    <button class="btn" id="f-reset">ล้างตัวกรอง</button>
+    <button class="btn primary" id="f-export">บันทึก CSV</button>`;
+  ["division","dept","sect","plant","vendor","tier"].forEach(k=>{
+    $("#f-"+k).onchange = e=>{
+      F[k]=e.target.value;
+      if(k==="division"){F.dept=F.sect=F.plant="";}
+      if(k==="dept"){F.sect=F.plant="";}
+      if(k==="sect"){F.plant="";}
+      resetPages(); syncFilters(); render();
+    };
+  });
+  let timer; $("#f-q").oninput = e=>{
+    clearTimeout(timer); timer=setTimeout(()=>{F.q=e.target.value.trim();resetPages();render();},220);
+  };
+  $("#f-reset").onclick = ()=>{
+    Object.keys(F).forEach(k=>F[k]=""); $("#f-q").value="";
+    resetPages(); syncFilters(); render();
+  };
+  $("#f-export").onclick = exportCSV;
+  syncFilters();
+}
+const PER0 = Object.assign({},PER);
+const resetPages = ()=>{Object.keys(PAGE).forEach(k=>PAGE[k]=1);Object.assign(PER,PER0);};
+
+function syncFilters(){
+  const t = D.trucks;
+  const up = (id,vals,cur,all)=>{
+    const s = $("#"+id); const v = vals.filter(Boolean).sort((a,b)=>a.localeCompare(b,"th"));
+    s.innerHTML = `<option value="">${all}</option>` +
+      v.map(x=>`<option value="${esc(x)}"${x===cur?" selected":""}>${esc(x)}</option>`).join("");
+    s.value = v.includes(cur) ? cur : "";
+  };
+  const uniq = (arr,k)=>[...new Set(arr.map(x=>x[k]))];
+  up("f-division", uniq(t,"division"), F.division, "ทุกกิจการ");
+  let a = F.division? t.filter(x=>x.division===F.division):t;
+  up("f-dept", uniq(a,"dept"), F.dept, "ทุกภาค");
+  let b = F.dept? a.filter(x=>x.dept===F.dept):a;
+  up("f-sect", uniq(b,"sect"), F.sect, "ทุกแผนก");
+  let c = F.sect? b.filter(x=>x.sect===F.sect):b;
+  up("f-plant", uniq(c,"plant"), F.plant, "ทุกโรงงาน");
+  let d = F.plant? c.filter(x=>x.plant===F.plant):c;
+  up("f-vendor", uniq(d,"vendor"), F.vendor, "ทุกผู้รับเหมา");
+  up("f-tier", D.tiers.map(x=>x.name), F.tier, "ทุกกลุ่ม");
+}
+
+function matchOrg(x){
+  return (!F.division||x.division===F.division) && (!F.dept||x.dept===F.dept)
+      && (!F.sect||x.sect===F.sect) && (!F.plant||x.plant===F.plant)
+      && (!F.vendor||x.vendor===F.vendor);
+}
+function trucks(){
+  const q = F.q.toLowerCase();
+  return D.trucks.filter(x=> matchOrg(x) && (!F.tier||x.tier===F.tier)
+    && (!q || x.truck.toLowerCase().includes(q) || x.plant.toLowerCase().includes(q)
+          || x.vendor.toLowerCase().includes(q)));
+}
+function drivers(){
+  const q = F.q.toLowerCase();
+  return D.drivers.filter(x=> matchOrg(x)
+    && (!q || x.driver.toLowerCase().includes(q) || x.plant.toLowerCase().includes(q)));
+}
+
+function sortBy(list, s){
+  const {k,d} = s;
+  return list.slice().sort((a,b)=>{
+    let x=a[k], y=b[k];
+    if(typeof x==="number"||typeof y==="number") return ((x||0)-(y||0))*d;
+    return String(x??"").localeCompare(String(y??""),"th")*d;
+  });
+}
+function headSort(th, tab, key){
+  th.className += " sortable";
+  if(SORT[tab].k===key) th.dataset.dir = SORT[tab].d;
+  th.onclick = ()=>{
+    const s = SORT[tab];
+    s.d = (s.k===key)? -s.d : (typeof key==="string"&&["truck","driver","plant","vendor"].includes(key)?1:-1);
+    s.k = key; PAGE[tab]=1; render();
+  };
+  return th;
+}
+
+/* ── ตัวช่วยสร้างตาราง ─────────────────────────────── */
+function panel(title, sub, body, footer){
+  const p = el("div","panel");
+  const h = el("div","panel-hd");
+  h.appendChild(el("h2",null,title));
+  if(sub) h.appendChild(el("div","sub",sub));
+  p.appendChild(h);
+  const sc = el("div","scroll"); sc.appendChild(body); p.appendChild(sc);
+  if(footer) p.appendChild(footer);
+  return p;
+}
+function pager(tab, total, per){
+  const pages = Math.max(1, Math.ceil(total/per));
+  if(PAGE[tab]>pages) PAGE[tab]=pages;
+  const f = el("div","pager");
+  const mk=(t,to,dis)=>{const b=el("button","btn",t);b.disabled=dis;b.onclick=()=>{PAGE[tab]=to;render();window.scrollTo({top:0});};return b;};
+  f.appendChild(mk("‹ ก่อนหน้า",PAGE[tab]-1,PAGE[tab]<=1));
+  f.appendChild(el("span",null,`หน้า ${PAGE[tab]} / ${pages} — ${n0(total)} รายการ`));
+  f.appendChild(mk("ถัดไป ›",PAGE[tab]+1,PAGE[tab]>=pages));
+  if(per<total && total<=2000){
+    const all=el("button","btn","แสดงทั้งหมด");
+    all.onclick=()=>{PER[tab]=total;PAGE[tab]=1;render();};
+    f.appendChild(all);
+  }
+  return f;
+}
+const slice = (list,tab)=>list.slice((PAGE[tab]-1)*PER[tab], PAGE[tab]*PER[tab]);
+function cls(v){ return v>=1?"v100":v>=.75?"v75":v>=.5?"v50":v>=.25?"v25":"v0"; }
+const ORG = [["division","กิจการ"],["dept","ภาค"],["sect","แผนก"],["plant","โรงงาน"],
+             ["vendor_id","รหัสผู้รับเหมา"],["vendor","ผู้รับเหมา"]];
+
+/* ── สลับแท็บ ─────────────────────────────────────── */
+function render(){
+  document.querySelectorAll("#tabs button").forEach(b=>
+    b.setAttribute("aria-selected", b.dataset.tab===TAB));
+  $("#filters").hidden = (TAB==="rules");
+  const v = $("#view"); v.innerHTML="";
+  ({overview:vOverview,score:vScore,reward:vReward,fine:vFine,detail:vDetail,rules:vRules}[TAB])(v);
+}
+
+/* ── 1. ภาพรวม ────────────────────────────────────── */
+function vOverview(root){
+  const t = trucks();
+  if(!t.length){ root.appendChild(el("div","empty","ไม่พบรถที่ตรงกับตัวกรอง")); return; }
+
+  const g = el("div","grid");
+
+  // การกระจายกลุ่ม TA
+  const tierColors = {"TA 1":"#2f9e5f","TA 2":"#7fb03a","TA 3":"#e0a91a","TA 4":"#8492a6","TA 5":"#e07a2f","TA 6":"#cc3b30"};
+  const cnt = {}; t.forEach(x=>cnt[x.tier]=(cnt[x.tier]||0)+1);
+  const bars = el("div"); bars.style.padding="13px";
+  D.tiers.forEach(ti=>{
+    const c = cnt[ti.name]||0, pc = c/t.length*100;
+    const row = el("div","bar-row");
+    row.appendChild(el("div",null,ti.name));
+    const bar = el("div","bar"); const i=el("i");
+    i.style.width = pc+"%"; i.style.background = tierColors[ti.name];
+    bar.appendChild(i); row.appendChild(bar);
+    row.appendChild(el("div","num",`${n0(c)} คัน · ${nf(pc,1)}%`));
+    bars.appendChild(row);
+  });
+  const p1 = panel("การกระจายกลุ่ม TA", `${n0(t.length)} คัน`, bars);
+  p1.querySelector(".scroll").style.maxHeight="none";
+  g.appendChild(p1);
+
+  // สรุปตามกิจการ
+  const by = {};
+  t.forEach(x=>{
+    const k = x.division||"(ไม่ระบุ)";
+    const o = by[k] || (by[k]={n:0,pct:0,qty:0,rev:0,inc:0,gar:0,net:0,ta1:0});
+    o.n++; o.pct+=x.pct; o.qty+=x.qty; o.rev+=x.revenue;
+    o.inc+=x.incentive; o.gar+=x.g_topup; o.net+=x.net;
+    if(x.tier==="TA 1") o.ta1++;
+  });
+  const tb = el("table");
+  tb.innerHTML = `<thead><tr><th>กิจการ</th><th class="n">รถ</th><th class="n">%TA เฉลี่ย</th>
+    <th class="n">TA 1</th><th class="n">คิวรวม</th><th class="n">รายได้ (บาท)</th>
+    <th class="n">เงินรางวัล</th><th class="n">ส่วนต่างการันตี</th><th class="n">รางวัลสุทธิ</th></tr></thead>`;
+  const tbody = el("tbody");
+  Object.entries(by).sort((a,b)=>b[1].net-a[1].net).forEach(([k,o])=>{
+    const tr = el("tr");
+    tr.innerHTML = `<td>${esc(k)}</td><td class="n">${n0(o.n)}</td>
+      <td class="n">${nf(o.pct/o.n,1)}%</td><td class="n">${n0(o.ta1)}</td>
+      <td class="n">${n0(o.qty)}</td><td class="n">${n0(o.rev)}</td>
+      <td class="n ${o.inc<0?"neg":""}">${n0(o.inc)}</td><td class="n">${n0(o.gar)}</td>
+      <td class="n ${o.net<0?"neg":""}"><b>${n0(o.net)}</b></td>`;
+    tbody.appendChild(tr);
+  });
+  const sum = {n:t.length,pct:t.reduce((s,x)=>s+x.pct,0),qty:0,rev:0,inc:0,gar:0,net:0,ta1:0};
+  t.forEach(x=>{sum.qty+=x.qty;sum.rev+=x.revenue;sum.inc+=x.incentive;sum.gar+=x.g_topup;sum.net+=x.net;if(x.tier==="TA 1")sum.ta1++;});
+  const tr = el("tr"); tr.style.fontWeight="600"; tr.style.background="#f4f5f7";
+  tr.innerHTML = `<td>รวม</td><td class="n">${n0(sum.n)}</td><td class="n">${nf(sum.pct/sum.n,1)}%</td>
+    <td class="n">${n0(sum.ta1)}</td><td class="n">${n0(sum.qty)}</td><td class="n">${n0(sum.rev)}</td>
+    <td class="n ${sum.inc<0?"neg":""}">${n0(sum.inc)}</td><td class="n">${n0(sum.gar)}</td>
+    <td class="n"><b>${n0(sum.net)}</b></td>`;
+  tbody.appendChild(tr); tb.appendChild(tbody);
+  const p2 = panel("สรุปตามกิจการ","", tb);
+  p2.style.gridColumn="1 / -1";
+  g.appendChild(p2);
+
+  // รถที่ต้องตามแก้
+  const worst = sortBy(t,{k:"pct",d:1}).slice(0,15);
+  const wt = el("table");
+  wt.innerHTML = `<thead><tr><th>เบอร์รถ</th><th>โรงงาน</th><th>ผู้รับเหมา</th>
+    <th class="n">คะแนน</th><th class="n">%TA</th><th class="c">กลุ่ม</th><th class="n">รางวัลสุทธิ</th></tr></thead>`;
+  const wb = el("tbody");
+  worst.forEach(x=>{
+    const tr=el("tr");
+    tr.innerHTML = `<td class="truck">${esc(x.truck)}</td><td><span class="trunc">${esc(x.plant)}</span></td>
+      <td><span class="trunc">${esc(x.vendor)}</span></td><td class="n">${nf(x.score)}</td>
+      <td class="n">${nf(x.pct,1)}%</td><td class="c">${tierTag(x.tier)}</td>
+      <td class="n ${x.net<0?"neg":""}">${n0(x.net)}</td>`;
+    wb.appendChild(tr);
+  });
+  wt.appendChild(wb);
+  g.appendChild(panel("15 คันที่ %TA ต่ำที่สุด","เสี่ยงโดนหักเงินรางวัล", wt));
+
+  root.appendChild(g);
+}
+const tierTag = t=>`<span class="tier t${t.slice(-1)}">${esc(t)}</span>`;
+
+/* ── 2. คะแนนรายวัน ───────────────────────────────── */
+function vScore(root){
+  const days = D.meta.days_in_month;
+  root.appendChild(hintBox(
+    "แต่ละช่องคือคะแนนของรถในวันนั้น (เต็ม 1 คะแนน/วัน) ช่องว่างคือวันที่ไม่มีการ Punch มุมขวาบนที่มีสามเหลี่ยมคือมีหมายเหตุ — วางเมาส์เพื่อดู"));
+  const list = sortBy(trucks(), SORT.score);
+  if(!list.length){ root.appendChild(el("div","empty","ไม่พบรถที่ตรงกับตัวกรอง")); return; }
+  const page = slice(list,"score");
+
+  const tb = el("table");
+  const thead = el("thead"); const hr = el("tr");
+  const th0 = headSort(el("th",null,"เบอร์รถ"),"score","truck");
+  th0.className += " sticky-l"; hr.appendChild(th0);
+  ORG.forEach(([k,l])=> hr.appendChild(headSort(el("th",null,l),"score",k)));
+  for(let d=1; d<=days; d++) hr.appendChild(el("th","c n",String(d)));
+  hr.appendChild(headSort(el("th","n","รวม"),"score","score"));
+  hr.appendChild(headSort(el("th","n","%TA"),"score","pct"));
+  hr.appendChild(headSort(el("th","c","กลุ่ม"),"score","tier"));
+  thead.appendChild(hr); tb.appendChild(thead);
+
+  const tbody = el("tbody");
+  page.forEach(x=>{
+    const tr = el("tr");
+    const td0 = el("td","sticky-l truck",x.truck); tr.appendChild(td0);
+    ORG.forEach(([k])=>{
+      const td = el("td"); const sp = el("span","trunc",x[k]||""); sp.title=x[k]||"";
+      td.appendChild(sp); tr.appendChild(td);
+    });
+    for(let d=1; d<=days; d++){
+      const v = x.days[d];
+      const td = el("td","d");
+      if(v!=null){ td.className = "d "+cls(v); td.textContent = v%1?nf(v,2):String(v);
+        if(x.rmk[d]){ td.className+=" mk"; td.title = x.rmk[d]; } }
+      tr.appendChild(td);
+    }
+    tr.appendChild(el("td","n",nf(x.score)));
+    tr.appendChild(el("td","n",nf(x.pct,1)+"%"));
+    const tt = el("td","c"); tt.innerHTML = tierTag(x.tier); tr.appendChild(tt);
+    tbody.appendChild(tr);
+  });
+  tb.appendChild(tbody);
+
+  const p = panel("คะแนนวันทำงานรายคัน",
+    `${n0(list.length)} คัน · วันที่ 1–${days}`, tb, pager("score",list.length,PER.score));
+  const lg = el("div","legend");
+  [["1.00","--s100"],["0.75","--s75"],["0.50","--s50"],["0.25","--s25"],["0","--s0"]].forEach(([t,c])=>{
+    const s = el("span"); const sw=el("i","sw"); sw.style.background=`var(${c})`;
+    s.appendChild(sw); s.appendChild(el("b",null,t)); lg.appendChild(s);
+  });
+  lg.appendChild(el("span","muted","ว่าง = ไม่มีการ Punch"));
+  p.appendChild(lg);
+  root.appendChild(p);
+}
+function hintBox(text){ const d=el("p","hint",text); return d; }
+
+/* ── 3. คำนวณรางวัล ───────────────────────────────── */
+function vReward(root){
+  const m = D.meta;
+  root.appendChild(hintBox(
+    `%TA = คะแนนรวม ÷ วันทำงาน ${m.work_days} วัน · เงินรางวัล = อัตราตามกลุ่ม × คิวรวม · `+
+    `ส่วนต่างการันตี = ยอดการันตีตามกลุ่ม − รายได้ค่าขนส่งจริง (ถ้ารายได้เกินการันตี = 0)`));
+  const list = sortBy(trucks(), SORT.reward);
+  if(!list.length){ root.appendChild(el("div","empty","ไม่พบรถที่ตรงกับตัวกรอง")); return; }
+  const page = slice(list,"reward");
+
+  const cols = [
+    ["truck","เบอร์รถ","t"],["division","กิจการ","t"],["dept","ภาค","t"],["sect","แผนก","t"],
+    ["plant","โรงงาน","t"],["vendor","ผู้รับเหมา","t"],["fleet","FLEET_TYPE_NO","c"],
+    ["score","คะแนนรวม","n"],["qty","คิวรวม","n"],["revenue","รายได้ค่าขนส่ง","n"],
+    ["pct","%TA","n"],["tier","กลุ่ม TA","c"],["inc_rate","อัตรา (บาท/คิว)","n"],
+    ["incentive","เงินรางวัล","n"],["g_base","ฐานการันตี","n"],["g_pct","%การันตี","n"],
+    ["g_amount","ยอดการันตี","n"],["g_topup","ส่วนต่างการันตี","n"],["net","รางวัลสุทธิ","n"]
+  ];
+  const tb = el("table"); const hr = el("tr");
+  cols.forEach(([k,l,a],i)=>{
+    const th = headSort(el("th",a==="n"?"n":a==="c"?"c":"",l),"reward",k);
+    if(i===0) th.className += " sticky-l";
+    hr.appendChild(th);
+  });
+  const th=el("thead"); th.appendChild(hr); tb.appendChild(th);
+
+  const tbody = el("tbody");
+  page.forEach(x=>{
+    const tr = el("tr");
+    const c0 = el("td","sticky-l truck",x.truck); tr.appendChild(c0);
+    tr.appendChild(orgTd(x.division)); tr.appendChild(orgTd(x.dept));
+    tr.appendChild(orgTd(x.sect)); tr.appendChild(orgTd(x.plant)); tr.appendChild(orgTd(x.vendor));
+    const f = el("td","c",x.fleet);
+    if(x.fleet==="T012") f.title = x.gt_ok? `รถใหม่ GT ถึง ${x.gt} — ใช้เกณฑ์การันตี T012`
+                                          : `GT หมดอายุ ${x.gt} — ใช้เกณฑ์การันตีรถเก่า`;
+    tr.appendChild(f);
+    tr.appendChild(el("td","n",nf(x.score)));
+    tr.appendChild(el("td","n",nf(x.qty)));
+    tr.appendChild(el("td","n",nf(x.revenue)));
+    tr.appendChild(el("td","n",nf(x.pct,1)+"%"));
+    const tt = el("td","c"); tt.innerHTML = tierTag(x.tier); tr.appendChild(tt);
+    tr.appendChild(el("td","n",String(x.inc_rate)));
+    tr.appendChild(el("td","n"+(x.incentive<0?" neg":""),nf(x.incentive)));
+    const gb = el("td","n", x.g_missing? "—" : nf(x.g_base,0));
+    if(x.g_missing) gb.title = "ไม่พบโรงงานนี้ในชีตการันตี";
+    tr.appendChild(gb);
+    tr.appendChild(el("td","n",nf(x.g_pct,1)+"%"));
+    tr.appendChild(el("td","n",nf(x.g_amount)));
+    tr.appendChild(el("td","n",nf(x.g_topup)));
+    const net = el("td","n"+(x.net<0?" neg":""), nf(x.net));
+    net.style.fontWeight="600"; tr.appendChild(net);
+    tbody.appendChild(tr);
+  });
+  // แถวรวม
+  const s = {qty:0,revenue:0,incentive:0,g_amount:0,g_topup:0,net:0,score:0};
+  list.forEach(x=>Object.keys(s).forEach(k=>s[k]+=x[k]));
+  const tr = el("tr"); tr.style.fontWeight="600"; tr.style.background="#f4f5f7";
+  tr.innerHTML = `<td class="sticky-l">รวม ${n0(list.length)} คัน</td><td colspan="6"></td>
+    <td class="n">${nf(s.score)}</td><td class="n">${nf(s.qty)}</td><td class="n">${nf(s.revenue)}</td>
+    <td colspan="3"></td><td class="n ${s.incentive<0?"neg":""}">${nf(s.incentive)}</td>
+    <td colspan="2"></td><td class="n">${nf(s.g_amount)}</td><td class="n">${nf(s.g_topup)}</td>
+    <td class="n">${nf(s.net)}</td>`;
+  tbody.appendChild(tr);
+  tb.appendChild(tbody);
+
+  root.appendChild(panel("การคำนวณรางวัลรายคัน",
+    `${n0(list.length)} คัน`, tb, pager("reward",list.length,PER.reward)));
+}
+function orgTd(v){ const td=el("td"); const s=el("span","trunc",v||""); s.title=v||""; td.appendChild(s); return td; }
+
+/* ── 4. หักเงิน จบส. ──────────────────────────────── */
+function vFine(root){
+  const days = D.meta.days_in_month;
+  root.appendChild(hintBox(
+    "ยอดหักรายวันมาจากรหัส punch_out_status ที่มีค่าปรับในชีต “คะแนน-Punch” (เช่น P = ไม่สวมชุดฟอร์ม 50 บาท, E = ผลประเมินบริการต้องปรับปรุง 100 บาท)"));
+  const list = sortBy(drivers(), SORT.fine);
+  if(!list.length){ root.appendChild(el("div","empty","ไม่พบคนขับที่ตรงกับตัวกรอง")); return; }
+  const page = slice(list,"fine");
+
+  const tb = el("table"); const hr = el("tr");
+  const th0 = headSort(el("th",null,"driver_no"),"fine","driver"); th0.className+=" sticky-l"; hr.appendChild(th0);
+  ORG.forEach(([k,l])=> hr.appendChild(headSort(el("th",null,l),"fine",k)));
+  for(let d=1; d<=days; d++) hr.appendChild(el("th","c n",String(d)));
+  hr.appendChild(headSort(el("th","n","รวมยอดเงินที่หัก (บาท)"),"fine","total"));
+  const th = el("thead"); th.appendChild(hr); tb.appendChild(th);
+
+  const tbody = el("tbody");
+  page.forEach(x=>{
+    const tr = el("tr");
+    tr.appendChild(el("td","sticky-l truck",x.driver));
+    ORG.forEach(([k])=>tr.appendChild(orgTd(x[k])));
+    for(let d=1; d<=days; d++){
+      const v = x.days[d];
+      const td = el("td","d");
+      if(v){ td.textContent = n0(v); td.className="d v0"; }
+      else { td.textContent="0"; td.className="d v100"; }
+      tr.appendChild(td);
+    }
+    const t = el("td","n"+(x.total>0?" neg":"")); t.textContent = n0(x.total);
+    t.style.fontWeight="600"; tr.appendChild(t);
+    tbody.appendChild(tr);
+  });
+  const tot = list.reduce((s,x)=>s+x.total,0);
+  const tr = el("tr"); tr.style.fontWeight="600"; tr.style.background="#f4f5f7";
+  tr.innerHTML = `<td class="sticky-l">รวม ${n0(list.length)} คน</td>
+    <td colspan="${ORG.length+days}"></td><td class="n neg">${n0(tot)}</td>`;
+  tbody.appendChild(tr); tb.appendChild(tbody);
+
+  root.appendChild(panel("การตัดเงินรางวัลของ จบส. (คนขับ)",
+    `${n0(list.filter(x=>x.total>0).length)} คนที่ถูกหัก · รวม ${n0(tot)} บาท`,
+    tb, pager("fine",list.length,PER.fine)));
+}
+
+/* ── 5. รายละเอียด Punch ──────────────────────────── */
+function vDetail(root){
+  const I = DETAIL.idx, q = F.q.toLowerCase();
+  const rows = DETAIL.rows.filter(r=>{
+    const o = DETAIL.org[r[I.truck]];
+    if(!o || !matchOrg(o)) return false;
+    if(F.tier && o.tier!==F.tier) return false;
+    if(q && !(r[I.truck].toLowerCase().includes(q) || r[I.driver].toLowerCase().includes(q))) return false;
+    return true;
+  });
+  root.appendChild(hintBox(
+    "หนึ่งแถวคือหนึ่งรายการ Punch — แสดงยอดหักแยกตามสาเหตุ และคะแนนสุทธิของรายการนั้น"));
+  if(!rows.length){ root.appendChild(el("div","empty","ไม่พบรายการที่ตรงกับตัวกรอง")); return; }
+
+  const sorted = rows.slice().sort((a,b)=>{
+    const k = I[SORT.detail.k] ?? I.day, d = SORT.detail.d;
+    const x=a[k], y=b[k];
+    return (typeof x==="number"? (x-y) : String(x).localeCompare(String(y),"th"))*d;
+  });
+  const page = slice(sorted,"detail");
+
+  const CT = {on_time:"ตรวจตรงเวลา",late_shift:"ตรวจรถสาย (เกินเวลาเข้างาน+30 น.)",
+              late_rest:"ตรวจรถสาย (พักครบ 13 ชม.แล้ว)",no_check:"ไม่ตรวจรถทั้งวัน"};
+  const cols = [["day","วันที่","c"],["plant_no","รหัสโรงงาน","t"],["truck","truck_no","t"],
+    ["driver","driver_no","t"],["device","device_no","c"],["pin","punch_in_status","c"],
+    ["pout","punch_out_status","c"],["check_time","check_time","c"],["ct_stat","สถานะ check_time","t"],
+    ["d_in","หัก punch_in","n"],["d_out","หัก punch_out","n"],["d_dev","หัก device","n"],
+    ["d_ct","หัก check_time","n"],["pre","คะแนนก่อนปรับ","n"],["net","คะแนนสุทธิ","n"],
+    ["remark","หมายเหตุ","t"]];
+  const tb = el("table"); const hr = el("tr");
+  cols.forEach(([k,l,a])=> hr.appendChild(headSort(el("th",a==="n"?"n":a==="c"?"c":"",l),"detail",k)));
+  const th = el("thead"); th.appendChild(hr); tb.appendChild(th);
+  const tbody = el("tbody");
+  page.forEach(r=>{
+    const tr = el("tr");
+    cols.forEach(([k,,a])=>{
+      let v = r[I[k]];
+      if(k==="ct_stat") v = CT[v]||v;
+      const td = el("td", a==="n"?"n":a==="c"?"c":"");
+      if(a==="n"){ td.textContent = v? nf(v,2):(k==="pre"||k==="net"? nf(v,2):"0"); if(v<0) td.className+=" neg"; }
+      else if(k==="remark"){ const s=el("span","trunc",v); s.title=v; s.style.maxWidth="260px"; td.appendChild(s); }
+      else { td.textContent = v;
+        if(k==="pout" || k==="pin"){ const mn = DETAIL.meaning[(k==="pin"?"punch_in_status|":"punch_out_status|")+v]; if(mn) td.title=mn; } }
+      tr.appendChild(td);
+    });
+    if(r[I.net]<1) tr.querySelector("td:nth-last-child(2)").className = "n "+cls(r[I.net]);
+    tbody.appendChild(tr);
+  });
+  tb.appendChild(tbody);
+  root.appendChild(panel("รายละเอียดการ Punch รายรายการ",
+    `${n0(rows.length)} รายการ`, tb, pager("detail",rows.length,PER.detail)));
+}
+
+/* ── 6. เกณฑ์ ─────────────────────────────────────── */
+function vRules(root){
+  const m = D.meta;
+  const g = el("div","grid");
+
+  const t1 = el("table");
+  t1.innerHTML = `<thead><tr><th>กลุ่ม TA</th><th class="n">%TA</th><th class="n">เงินรางวัล (บาท/คิว)</th>
+    <th class="n">การันตี</th></tr></thead>`;
+  const b1 = el("tbody");
+  D.tiers.forEach((x,i)=>{
+    const prev = D.tiers[i-1];
+    const range = i===0? `> ${x.min}%` : (x.min<0? `< ${prev.min}%` : `${x.min}% – ${prev.min}%`);
+    const tr = el("tr");
+    tr.innerHTML = `<td>${tierTag(x.name)}</td><td class="n">${range}</td>
+      <td class="n ${x.inc<0?"neg":x.inc>0?"pos":""}">${x.inc}</td>
+      <td class="n">${x.gpct? x.gpct+"%":"—"}</td>`;
+    b1.appendChild(tr);
+  });
+  t1.appendChild(b1);
+  g.appendChild(panel("เกณฑ์กลุ่ม TA และรางวัล","", t1));
+
+  const t2 = el("table");
+  t2.innerHTML = `<thead><tr><th>ช่อง</th><th>รหัส</th><th>ความหมาย</th>
+    <th class="n">คะแนนรถ</th><th class="n">หัก จบส.(บาท)</th></tr></thead>`;
+  const b2 = el("tbody");
+  D.rules.forEach(r=>{
+    const tr = el("tr");
+    tr.innerHTML = `<td class="muted">${esc(r.grp)}</td><td><b>${esc(r.code)}</b></td>
+      <td><span class="trunc" style="max-width:340px" title="${esc(r.meaning)}">${esc(r.meaning)}</span></td>
+      <td class="n ${r.pts<0?"neg":""}">${r.pts}</td><td class="n">${esc(r.fine)}</td>`;
+    b2.appendChild(tr);
+  });
+  t2.appendChild(b2);
+  const p2 = panel("ตารางคะแนน Punch","จากชีต “คะแนน-Punch”", t2);
+  p2.style.gridColumn="1 / -1";
+  g.appendChild(p2);
+
+  const how = el("div"); how.style.padding="13px"; how.style.fontSize="13px";
+  how.innerHTML = `
+    <p style="margin:0 0 8px">คะแนนวันทำงานของรถ 1 คัน ตั้งต้นที่ <b>1 คะแนน/วัน</b>
+    แล้วหักตามเหตุการณ์ที่พบ โดยหักได้ไม่เกิน 1 คะแนน และได้ไม่เกิน 1 คะแนนต่อวัน</p>
+    <ol style="margin:0;padding-left:20px">
+      <li>หักจาก <b>punch_in_status</b> (มาสาย T = −0.25)</li>
+      <li>หักจาก <b>device_no</b> (Punch ผ่าน Web = −0.25)</li>
+      <li>หักจาก <b>punch_out_status</b> ตามตารางคะแนนด้านบน (ว่าง = หนีงาน −1)</li>
+      <li>หักจาก <b>check_time</b>: ไม่ตรวจรถทั้งวัน = −1 · ตรวจรถสาย = −0.25</li>
+    </ol>
+    <p style="margin:10px 0 0">เส้นตายการตรวจรถคือเวลาที่ช้ากว่าระหว่าง
+    <b>เวลาเข้างานโรงงาน + ${m.late_grace} นาที</b> กับ
+    <b>ดีพีใบสุดท้ายของวันก่อน + ${m.rest_hours} ชม.</b> (สิทธิ์พักของคนขับ)
+    ถ้าตรวจรถหลังเส้นตายนี้ถือว่าสาย</p>
+    <p style="margin:10px 0 0">ถ้า driver_no หนึ่งคน Punch รถมากกว่า 1 คันในวันเดียวกัน
+    จะคิดคะแนนแยกตามเกณฑ์ของรถแต่ละคัน และกำกับหมายเหตุไว้ในช่องคะแนนวันนั้น</p>
+    <p style="margin:10px 0 0">ยอดการันตีใช้เกณฑ์ <b>T012</b> เฉพาะรถที่ FLEET_TYPE_NO = T012
+    และวันหมดอายุ GT รถใหม่ยังไม่พ้นเดือน ${m.month_en} ${m.year} — นอกนั้นใช้เกณฑ์การันตีรถเก่า</p>`;
+  const p3 = panel("วิธีคิดคะแนน","", how);
+  p3.querySelector(".scroll").style.maxHeight="none";
+  p3.style.gridColumn="1 / -1";
+  g.appendChild(p3);
+  root.appendChild(g);
+}
+
+/* ── บันทึก CSV ───────────────────────────────────── */
+function exportCSV(){
+  const days = D.meta.days_in_month;
+  let name="export", head=[], rows=[];
+  const org = x=>ORG.map(([k])=>x[k]||"");
+  if(TAB==="score"||TAB==="overview"){
+    name="คะแนนรายวัน";
+    head=["เบอร์รถ",...ORG.map(o=>o[1]),...Array.from({length:days},(_,i)=>i+1),"คะแนนรวม","%TA","กลุ่ม TA"];
+    rows=sortBy(trucks(),SORT.score).map(x=>[x.truck,...org(x),
+      ...Array.from({length:days},(_,i)=>x.days[i+1]??""),x.score,x.pct,x.tier]);
+  } else if(TAB==="reward"){
+    name="คำนวณรางวัล";
+    head=["เบอร์รถ",...ORG.map(o=>o[1]),"FLEET_TYPE_NO","วันหมดอายุ GT","คะแนนรวม","คิวรวม",
+      "รายได้ค่าขนส่ง","%TA","กลุ่ม TA","อัตรา(บาท/คิว)","เงินรางวัล","ฐานการันตี","%การันตี",
+      "ยอดการันตี","ส่วนต่างการันตี","รางวัลสุทธิ"];
+    rows=sortBy(trucks(),SORT.reward).map(x=>[x.truck,...org(x),x.fleet,x.gt||"",x.score,x.qty,
+      x.revenue,x.pct,x.tier,x.inc_rate,x.incentive,x.g_base,x.g_pct,x.g_amount,x.g_topup,x.net]);
+  } else if(TAB==="fine"){
+    name="หักเงินจบส";
+    head=["driver_no",...ORG.map(o=>o[1]),...Array.from({length:days},(_,i)=>i+1),"รวมยอดเงินที่หัก (บาท)"];
+    rows=sortBy(drivers(),SORT.fine).map(x=>[x.driver,...org(x),
+      ...Array.from({length:days},(_,i)=>x.days[i+1]??0),x.total]);
+  } else if(TAB==="detail"){
+    name="รายละเอียดPunch";
+    head=DETAIL.cols;
+    const I=DETAIL.idx, q=F.q.toLowerCase();
+    rows=DETAIL.rows.filter(r=>{
+      const o=DETAIL.org[r[I.truck]];
+      return o && matchOrg(o) && (!F.tier||o.tier===F.tier)
+        && (!q || r[I.truck].toLowerCase().includes(q) || r[I.driver].toLowerCase().includes(q));
+    });
+  } else if(TAB==="rules"){
+    name="เกณฑ์คะแนน";
+    head=["ช่อง","รหัส","ความหมาย","คะแนนรถ","หัก จบส.(บาท)"];
+    rows=D.rules.map(r=>[r.grp,r.code,r.meaning,r.pts,r.fine]);
+  }
+  const q = v=>{ const s=String(v??""); return /[",\n]/.test(s)? '"'+s.replace(/"/g,'""')+'"' : s; };
+  const csv = "\uFEFF"+[head,...rows].map(r=>r.map(q).join(",")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+  a.download = `TA_${name}_${D.meta.month_en}${D.meta.year}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+load();
+</script>
+</body>
+</html>
