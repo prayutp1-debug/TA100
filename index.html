@@ -219,7 +219,7 @@ var READ_OPTS = {type:"array", cellDates:false, cellText:false, cellNF:false, de
                  sheets:["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch"]};
 var AOA_OPTS  = {header:1, raw:true, defval:null};
 
-var ENGINE_VERSION = 9;
+var ENGINE_VERSION = 10;
 
 var TA_TIERS = [
   {name:"TA 1", min:95, inc: 6, gpct:1.000},
@@ -229,8 +229,7 @@ var TA_TIERS = [
   {name:"TA 5", min:50, inc:-3, gpct:0},
   {name:"TA 6", min:-1, inc:-6, gpct:0}
 ];
-var LATE_GRACE_MIN = 30;   // check_time ต้องไม่เกินเวลาเข้างานโรงงาน + 30 นาที
-var REST_HOURS     = 13;   // ดีพีใบสุดท้ายวันก่อน + 13 ชม. = สิทธิ์พักของคนขับ
+var LATE_GRACE_MIN = 30;   // กรณี Punch in ปกติ: check_time ต้องไม่เกินเวลาเข้างานโรงงาน + 30 นาที
 var MONTH_EN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 /* ── ตัวช่วยอ่านค่าจากเซลล์ ─────────────────────────────────── */
@@ -477,24 +476,16 @@ function buildDB(sheets, report){
     var ct = timeSecs(cell(p,iCheck));
     if (ct == null){
       dCt = DED_NO_CHECK; ctStat = "no_check"; note = "ไม่ตรวจรถทั้งวัน";
+    } else if (dIn < 0){
+      // punch_in = T (มาสาย) หัก 0.25 ไปแล้ว ไม่หักเรื่องตรวจรถสายซ้ำอีก
+      ctStat = "skip_late";
     } else {
+      // punch_in = O (ปกติ) จึงเช็กว่าตรวจรถทันเวลาเข้างาน + 30 นาทีหรือไม่
       var pi = plantIn[plantNo]; if (pi == null) pi = 8*3600;
-      var deadline = day*86400 + pi + LATE_GRACE_MIN*60, why = "shift";
-      var prev = timeSecs(cell(p,iPrev));
-      if (prev != null){
-        var restDl = (day-1)*86400 + prev + REST_HOURS*3600;
-        if (restDl > deadline){ deadline = restDl; why = "rest"; }
-      }
+      var deadline = day*86400 + pi + LATE_GRACE_MIN*60;
       if (Math.floor((day*86400 + ct)/60) > Math.floor(deadline/60)){
-        dCt = DED_LATE;
-        if (why === "rest"){
-          ctStat = "late_rest";
-          note = "พักครบ " + REST_HOURS + " ชม. เวลา " + hhmm(deadline % 86400) +
-                 " แต่ตรวจรถ " + hhmm(ct);
-        } else {
-          ctStat = "late_shift";
-          note = "ตรวจรถเกิน 30 นาทีไม่ทันเวลาเข้างาน";
-        }
+        dCt = DED_LATE; ctStat = "late_shift";
+        note = "ตรวจรถเกิน " + LATE_GRACE_MIN + " นาทีไม่ทันเวลาเข้างาน";
       }
     }
 
@@ -601,7 +592,7 @@ function buildDB(sheets, report){
     meta: {
       months: months,
       generated: new Date().toISOString().slice(0,16).replace("T"," "),
-      punch_rows: detail.length, rest_hours: REST_HOURS, late_grace: LATE_GRACE_MIN,
+      punch_rows: detail.length, late_grace: LATE_GRACE_MIN,
       engine: ENGINE_VERSION
     },
     tiers: TA_TIERS.map(function(t){ return {name:t.name, min:t.min, inc:t.inc, gpct:+(t.gpct*100).toFixed(1)}; }),
@@ -676,7 +667,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 12;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 13;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -1578,7 +1569,7 @@ function vDetail(root){
   const page = slice(sorted,"detail");
 
   const CT = {on_time:"ตรวจตรงเวลา",late_shift:"ตรวจรถสาย (เกินเวลาเข้างาน+30 น.)",
-              late_rest:"ตรวจรถสาย (พักครบ 13 ชม.แล้ว)",no_check:"ไม่ตรวจรถทั้งวัน"};
+              skip_late:"ไม่คิดซ้ำ (หักมาสายไปแล้ว)",no_check:"ไม่ตรวจรถทั้งวัน"};
   const cols = [];
   if (multi) cols.push(["ym","เดือน","c"]);
   cols.push(["day","วันที่","c"],["plant_no","รหัสโรงงาน","t"],["truck","truck_no","t"],
@@ -1671,12 +1662,17 @@ function vRules(root){
       <li>หักจาก <b>punch_in_status</b> (มาสาย T = −0.25)</li>
       <li>หักจาก <b>device_no</b> (Punch ผ่าน Web = −0.25)</li>
       <li>หักจาก <b>punch_out_status</b> ตามตารางคะแนนด้านบน (ว่าง = หนีงาน −1)</li>
-      <li>หักจาก <b>check_time</b>: ไม่ตรวจรถทั้งวัน = −1 · ตรวจรถสาย = −0.25</li>
+      <li>หักจาก <b>check_time</b>: ไม่ตรวจรถทั้งวัน (ช่องว่าง) = −1</li>
     </ol>
-    <p style="margin:10px 0 0">เส้นตายการตรวจรถคือเวลาที่ช้ากว่าระหว่าง
-    <b>เวลาเข้างานโรงงาน + ${m.late_grace} นาที</b> กับ
-    <b>ดีพีใบสุดท้ายของวันก่อน + ${m.rest_hours} ชม.</b> (สิทธิ์พักของคนขับ)
-    ถ้าตรวจรถหลังเส้นตายนี้ถือว่าสาย</p>
+    <p style="margin:10px 0 0"><b>มาสาย กับ ตรวจรถสาย หักได้อย่างใดอย่างหนึ่งเท่านั้น</b></p>
+    <ul style="margin:6px 0 0;padding-left:20px">
+      <li><b>punch_in_status = T</b> (มาสาย) → หัก 0.25 เรื่องมาสายอย่างเดียว
+          ไม่นำเรื่องตรวจรถสายมาหักซ้ำ</li>
+      <li><b>punch_in_status = O</b> (ปกติ) → ไปเช็กว่าตรวจรถทัน
+          <b>เวลาเข้างานโรงงาน + ${m.late_grace} นาที</b> หรือไม่ ถ้าไม่ทันหัก 0.25</li>
+    </ul>
+    <p style="margin:10px 0 0">ส่วนกรณีไม่ตรวจรถทั้งวัน (ช่อง check_time ว่าง) หัก 1 คะแนนเสมอ
+    ไม่ว่า punch_in จะเป็น T หรือ O</p>
     <p style="margin:10px 0 0">ถ้า driver_no หนึ่งคน Punch รถมากกว่า 1 คันในวันเดียวกัน
     จะคิดคะแนนแยกตามเกณฑ์ของรถแต่ละคัน และกำกับหมายเหตุไว้ในช่องคะแนนวันนั้น</p>
     <p style="margin:10px 0 0">เมื่อเลือกช่วงมากกว่า 1 เดือน ระบบจะรวมคะแนนและคิวของทุกเดือนในช่วง
