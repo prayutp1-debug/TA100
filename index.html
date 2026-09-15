@@ -113,7 +113,10 @@ tbody tr:hover .sticky-l{background:#f4f8fd}
 .bar.diverge{position:relative;display:flex;background:var(--rule-2)}
 .bar.diverge::before{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;
   width:1px;background:var(--ink-3);opacity:.5}
-.bar-row.wide{grid-template-columns:190px 1fr 110px}
+.bar-row .num{white-space:nowrap}
+.bar-row.wide{grid-template-columns:minmax(150px,260px) 1fr 150px}
+.bar-row.wide>div:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:720px){.bar-row.wide{grid-template-columns:110px 1fr 105px;font-size:12px}}
 table.two-head thead tr:nth-child(2) th{top:24px}
 table.two-head thead tr:first-child th{background:var(--band-2)}
 .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--ink-2);padding:9px 13px}
@@ -658,7 +661,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 8;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 9;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -1171,7 +1174,7 @@ function vOverview(root){
   const bars = el("div"); bars.style.padding="13px";
   D.tiers.forEach(ti=>{
     const c = cnt[ti.name]||0, pc = t.length? c/t.length*100 : 0;
-    const row = el("div","bar-row");
+    const row = el("div","bar-row wide");
     row.appendChild(el("div",null,ti.name));
     const bar = el("div","bar"); const i=el("i");
     i.style.width = pc+"%"; i.style.background = TIER_COLOR[ti.name];
@@ -1181,6 +1184,7 @@ function vOverview(root){
   });
   const p1 = panel("การกระจายกลุ่ม TA", `${n0(t.length)} คัน · ${rangeLabel()}`, bars);
   p1.querySelector(".scroll").style.maxHeight="none";
+  p1.style.gridColumn = "1 / -1";
   g.appendChild(p1);
 
   /* 1b. กลุ่ม TA แยกรายกิจการ (แนวเดียวกับกราฟด้านบน) */
@@ -1193,9 +1197,8 @@ function vOverview(root){
   const dv = el("div"); dv.style.padding="13px";
   Object.keys(byDiv).sort((a,b)=>byDiv[b].n-byDiv[a].n).forEach(k=>{
     const o = byDiv[k];
-    const row = el("div","bar-row");
+    const row = el("div","bar-row wide");
     const nm = el("div",null,k); nm.title = k;
-    nm.style.overflow="hidden"; nm.style.textOverflow="ellipsis"; nm.style.whiteSpace="nowrap";
     row.appendChild(nm);
     const bar = el("div","bar stack");
     D.tiers.forEach(ti=>{
@@ -1216,8 +1219,9 @@ function vOverview(root){
     s.appendChild(sw); s.appendChild(el("b",null,ti.name)); lg.appendChild(s);
   });
   dv.appendChild(lg);
-  const p1b = panel("กลุ่ม TA แยกรายกิจการ", "สัดส่วนรถในแต่ละกลุ่ม", dv);
+  const p1b = panel("กลุ่ม TA แยกรายกิจการ", "สัดส่วนรถในแต่ละกลุ่ม · " + rangeLabel(), dv);
   p1b.querySelector(".scroll").style.maxHeight="none";
+  p1b.style.gridColumn = "1 / -1";
   g.appendChild(p1b);
 
   /* 1c. เงินรางวัลรายผู้รับเหมา */
@@ -1241,7 +1245,6 @@ function vOverview(root){
     prevNeg = neg;
     const row = el("div","bar-row wide");
     const nm = el("div",null,k); nm.title = `${k} · ${n0(o.n)} คัน · ${n0(o.qty)} คิว`;
-    nm.style.overflow="hidden"; nm.style.textOverflow="ellipsis"; nm.style.whiteSpace="nowrap";
     row.appendChild(nm);
     const bar = el("div","bar diverge");
     const left = el("i","half"), right = el("i","half");
