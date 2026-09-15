@@ -9,12 +9,13 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --ink:#151d28; --ink-2:#4a5769; --ink-3:#7c8899;
-  --paper:#e8e9e6; --card:#fff; --rule:#d6dae0; --rule-2:#eceef1;
-  --band:#1b2430; --band-2:#2b3849;
-  --signal:#f0b429; --link:#1d5fa8;
-  --s100:#bfe3c0; --s75:#e4efb4; --s50:#fde9a9; --s25:#fbcf9c; --s0:#f4a9a4;
-  --neg:#c0392b; --pos:#1f7a4d;
+  --ink:#17203d; --ink-2:#4c5b7d; --ink-3:#8492b0;
+  --paper:#eef2fb; --card:#fff; --rule:#d9e2f3; --rule-2:#eef2f9;
+  --band:#4338ca; --band-2:#6d5cf0;
+  --band-grad:linear-gradient(115deg,#4338ca 0%,#7c3aed 42%,#0891b2 100%);
+  --signal:#fbbf24; --link:#2563eb;
+  --s100:#86e3a6; --s75:#cdeb8b; --s50:#ffe066; --s25:#ffb877; --s0:#ff9191;
+  --neg:#e11d48; --pos:#059669;
 }
 *{box-sizing:border-box}
 [hidden]{display:none !important}
@@ -28,18 +29,19 @@ button,input,select{font:inherit;color:inherit}
 .num{font-variant-numeric:tabular-nums}
 
 /* ── ส่วนหัว ───────────────────────────────────────── */
-header{background:var(--band);color:#fff;padding:18px 22px 0}
+header{background:var(--band-grad);color:#fff;padding:18px 22px 0}
 .hd-top{display:flex;flex-wrap:wrap;align-items:baseline;gap:14px;max-width:1680px;margin:0 auto}
 .hd-top h1{margin:0;font-size:21px;font-weight:600;letter-spacing:-.2px}
 .hd-top .per{color:var(--signal);font-weight:600;font-size:15px}
-.hd-top .meta{color:#93a1b5;font-size:12.5px;margin-left:auto;text-align:right}
-.kpis{display:flex;flex-wrap:wrap;gap:1px;background:var(--band-2);
-  max-width:1680px;margin:16px auto 0;border-radius:5px 5px 0 0;overflow:hidden}
-.kpi{background:var(--band);padding:11px 16px;flex:1 1 150px}
+.hd-top .meta{color:rgba(255,255,255,.78);font-size:12.5px;margin-left:auto;text-align:right}
+.kpis{display:flex;flex-wrap:wrap;gap:1px;background:rgba(255,255,255,.22);
+  max-width:1680px;margin:16px auto 0;border-radius:7px 7px 0 0;overflow:hidden}
+.kpi{background:rgba(255,255,255,.12);padding:11px 16px;flex:1 1 150px;
+  backdrop-filter:blur(2px)}
 .kpi b{display:block;font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
-.kpi span{font-size:11.5px;color:#93a1b5}
+.kpi span{font-size:11.5px;color:rgba(255,255,255,.8)}
 nav{display:flex;gap:0;max-width:1680px;margin:0 auto;overflow-x:auto}
-nav button{background:none;border:0;border-bottom:3px solid transparent;color:#a8b4c5;
+nav button{background:none;border:0;border-bottom:3px solid transparent;color:rgba(255,255,255,.72);
   padding:12px 15px;cursor:pointer;white-space:nowrap;font-size:13.5px}
 nav button:hover{color:#fff}
 nav button[aria-selected=true]{color:#fff;border-bottom-color:var(--signal);font-weight:600}
@@ -54,7 +56,7 @@ nav button:focus-visible{outline:2px solid var(--signal);outline-offset:-4px}
 .f select,.f input{padding:6px 8px;border:1px solid var(--rule);border-radius:4px;background:#fff;max-width:190px}
 .f select:focus,.f input:focus{outline:2px solid var(--link);outline-offset:-1px;border-color:var(--link)}
 .btn{padding:7px 13px;border:1px solid var(--rule);background:#fff;border-radius:4px;cursor:pointer}
-.btn:hover{background:#f4f5f7;border-color:var(--ink-3)}
+.btn:hover{background:#eef3ff;border-color:var(--link);color:var(--link)}
 .btn.primary{background:var(--band);color:#fff;border-color:var(--band)}
 .btn.primary:hover{background:var(--band-2)}
 .spacer{margin-left:auto}
@@ -63,7 +65,7 @@ nav button:focus-visible{outline:2px solid var(--signal);outline-offset:-4px}
 /* ── ตาราง ─────────────────────────────────────────── */
 .panel{background:var(--card);border:1px solid var(--rule);border-radius:6px;overflow:hidden}
 .panel-hd{display:flex;flex-wrap:wrap;gap:10px;align-items:center;
-  padding:10px 13px;border-bottom:1px solid var(--rule);background:#fafbfc}
+  padding:10px 13px;border-bottom:1px solid var(--rule);background:#f6f8ff}
 .panel-hd h2{margin:0;font-size:14.5px;font-weight:600}
 .panel-hd .sub{font-size:12px;color:var(--ink-3)}
 .scroll{overflow:auto;max-height:calc(100vh - 300px)}
@@ -77,12 +79,12 @@ th.sortable:hover{background:var(--band-2)}
 th.sortable::after{content:'';opacity:.45;margin-left:4px}
 th.sortable[data-dir="1"]::after{content:'▲'}
 th.sortable[data-dir="-1"]::after{content:'▼'}
-tbody tr:hover td{background:#f4f8fd}
+tbody tr:hover td{background:#eaf1ff}
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 td.c,th.c{text-align:center}
 .sticky-l{position:sticky;left:0;background:#fff;z-index:2;border-right:1px solid var(--rule)}
 thead .sticky-l{background:var(--band);z-index:4}
-tbody tr:hover .sticky-l{background:#f4f8fd}
+tbody tr:hover .sticky-l{background:#eaf1ff}
 .truck{font-weight:600}
 .muted{color:var(--ink-3)}
 .trunc{max-width:150px;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:bottom}
@@ -97,12 +99,12 @@ tbody tr:hover .sticky-l{background:#f4f8fd}
   border-top-color:var(--band);border-right-color:var(--band)}
 
 .tier{display:inline-block;padding:1px 7px;border-radius:3px;font-size:11.5px;font-weight:600}
-.t1{background:#d3ecd6;color:#1c6b39} .t2{background:#e2f0c8;color:#4a6b14}
-.t3{background:#fdeeb8;color:#7a5a06} .t4{background:#e7eaef;color:#495568}
-.t5{background:#fbd7c6;color:#9c4210} .t6{background:#f7c2be;color:#9b241a}
+.t1{background:#d1fae5;color:#047857} .t2{background:#ecfccb;color:#4d7c0f}
+.t3{background:#fef3c7;color:#b45309} .t4{background:#e2e8f0;color:#475569}
+.t5{background:#ffedd5;color:#c2410c} .t6{background:#fee2e2;color:#b91c1c}
 
 .pager{display:flex;gap:8px;align-items:center;padding:9px 13px;border-top:1px solid var(--rule);
-  background:#fafbfc;font-size:12.5px;flex-wrap:wrap}
+  background:#f6f8ff;font-size:12.5px;flex-wrap:wrap}
 
 /* ── ภาพรวม ────────────────────────────────────────── */
 .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
@@ -128,14 +130,14 @@ table.two-head thead tr:first-child th{background:var(--band-2)}
 .hd-actions button{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.2);
   color:#dfe6ef;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer}
 .hd-actions button:hover{background:rgba(255,255,255,.18);color:#fff}
-.overlay{position:fixed;inset:0;background:rgba(232,233,230,.96);z-index:99;
+.overlay{position:fixed;inset:0;background:rgba(238,242,251,.95);z-index:99;
   display:flex;align-items:center;justify-content:center;padding:24px}
 .loader{background:var(--card);border:1px solid var(--rule);border-radius:8px;
   padding:26px 28px;max-width:440px;width:100%;box-shadow:0 8px 28px rgba(20,30,45,.13)}
 .loader h3{margin:0 0 4px;font-size:16px;font-weight:600}
 .loader p{margin:0 0 16px;font-size:12.5px;color:var(--ink-3)}
 .prog{height:6px;background:var(--rule-2);border-radius:3px;overflow:hidden}
-.prog i{display:block;height:100%;background:var(--band);width:0;
+.prog i{display:block;height:100%;background:var(--band-grad);width:0;
   transition:width .35s ease}
 .stage{margin-top:9px;font-size:12.5px;color:var(--ink-2);
   display:flex;justify-content:space-between;gap:10px}
@@ -659,7 +661,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 10;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 11;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -1145,8 +1147,10 @@ const slice = (list,tab)=>list.slice((PAGE[tab]-1)*PER[tab], PAGE[tab]*PER[tab])
 function cls(v){ return v>=1?"v100":v>=.75?"v75":v>=.5?"v50":v>=.25?"v25":"v0"; }
 const ORG = [["division","กิจการ"],["dept","ภาค"],["sect","แผนก"],["plant","โรงงาน"],
              ["vendor_id","รหัสผู้รับเหมา"],["vendor","ผู้รับเหมา"]];
-const TIER_COLOR = {"TA 1":"#2f9e5f","TA 2":"#7fb03a","TA 3":"#e0a91a",
-                    "TA 4":"#8492a6","TA 5":"#e07a2f","TA 6":"#cc3b30"};
+const TIER_COLOR = {"TA 1":"#10b981","TA 2":"#84cc16","TA 3":"#f59e0b",
+                    "TA 4":"#94a3b8","TA 5":"#f97316","TA 6":"#ef4444"};
+const KPI_COLOR = ["#fde047","#7dd3fc","#86efac","#fca5a5",
+                   "#c4b5fd","#fdba74","#f9a8d4","#5eead4"];
 const tierTag = t=>`<span class="tier t${t.slice(-1)}">${esc(t)}</span>`;
 function orgTd(v){ const td=el("td"); const s=el("span","trunc",v||""); s.title=v||""; td.appendChild(s); return td; }
 function hintBox(text){ return el("p","hint",text); }
@@ -1248,7 +1252,7 @@ function vOverview(root){
     const fill = el("i");
     fill.style.width = (Math.abs(o.net)/maxAbs*100) + "%";
     fill.style.minWidth = "3px";
-    fill.style.background = neg ? "#cc3b30" : "#2f9e5f";
+    fill.style.background = neg ? "#ef4444" : "#10b981";
     bar.appendChild(fill);
     bar.title = `เงินรางวัล ${n0(o.inc)} + ส่วนต่างการันตี ${n0(o.gar)} = สุทธิ ${n0(o.net)} บาท`;
     row.appendChild(bar);
@@ -1293,7 +1297,7 @@ function vOverview(root){
   });
   const sum = {n:t.length,pct:t.reduce((s,x)=>s+x.pct,0),qty:0,rev:0,inc:0,gar:0,net:0,ta1:0};
   t.forEach(x=>{sum.qty+=x.qty;sum.rev+=x.revenue;sum.inc+=x.incentive;sum.gar+=x.g_topup;sum.net+=x.net;if(x.tier==="TA 1")sum.ta1++;});
-  const tr = el("tr"); tr.style.fontWeight="600"; tr.style.background="#f4f5f7";
+  const tr = el("tr"); tr.style.fontWeight="600"; tr.style.background="#eef2fb";
   tr.innerHTML = `<td>รวม</td><td class="n">${n0(sum.n)}</td><td class="n">${nf(sum.pct/sum.n,1)}%</td>
     <td class="n">${n0(sum.ta1)}</td><td class="n">${n0(sum.qty)}</td><td class="n">${n0(sum.rev)}</td>
     <td class="n ${sum.inc<0?"neg":""}">${n0(sum.inc)}</td><td class="n">${n0(sum.gar)}</td>
@@ -1337,7 +1341,8 @@ function kpiStrip(t){
     [n0(tot("incentive")),"เงินรางวัล (บาท)"],
     [n0(tot("g_topup")),"ส่วนต่างการันตี (บาท)"],
     [n0(tot("net")),"รางวัลสุทธิ (บาท)"]
-  ].map(([v,l])=>`<div class="kpi"><b>${v}</b><span>${esc(l)}</span></div>`).join("");
+  ].map(([v,l],i)=>`<div class="kpi"><b style="color:${KPI_COLOR[i%KPI_COLOR.length]}">${v}</b>`+
+       `<span>${esc(l)}</span></div>`).join("");
 }
 
 /* ── 2. คะแนนรายวัน ───────────────────────────────────────── */
@@ -1462,7 +1467,7 @@ function vReward(root){
   });
   const s = {qty:0,revenue:0,incentive:0,g_amount:0,g_topup:0,net:0,score:0};
   list.forEach(x=>Object.keys(s).forEach(k=>s[k]+=x[k]));
-  const tr = el("tr"); tr.style.fontWeight="600"; tr.style.background="#f4f5f7";
+  const tr = el("tr"); tr.style.fontWeight="600"; tr.style.background="#eef2fb";
   tr.innerHTML = `<td class="sticky-l">รวม ${n0(list.length)} คัน</td><td colspan="6"></td>
     <td class="n">${nf(s.score)}</td><td class="n">${nf(s.qty)}</td><td class="n">${nf(s.revenue)}</td>
     <td colspan="3"></td><td class="n ${s.incentive<0?"neg":""}">${nf(s.incentive)}</td>
@@ -1518,7 +1523,7 @@ function vFine(root){
     tbody.appendChild(tr);
   });
   const tot = list.reduce((s,x)=>s+x.total,0);
-  const tr = el("tr"); tr.style.fontWeight="600"; tr.style.background="#f4f5f7";
+  const tr = el("tr"); tr.style.fontWeight="600"; tr.style.background="#eef2fb";
   tr.innerHTML = `<td class="sticky-l">รวม ${n0(list.length)} คน</td>
     <td colspan="${ORG.length+cols.length}"></td><td class="n neg">${n0(tot)}</td>`;
   tbody.appendChild(tr); tb.appendChild(tbody);
