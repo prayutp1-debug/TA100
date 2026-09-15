@@ -589,7 +589,9 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 <script>
 "use strict";
 const APP_VERSION = 4;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
-const XLSX_URL = "data/TA100.xlsx";   // ฐานข้อมูล — เปลี่ยนเดือนใหม่แค่แทนที่ไฟล์นี้
+// ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
+const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
+let XLSX_URL = XLSX_CANDIDATES[0];
 let D = null, DETAIL = null, TAB = "overview", SRC = {};
 const F = {division:"",dept:"",sect:"",plant:"",vendor:"",tier:"",q:""};
 const PAGE = {overview:1,score:1,reward:1,fine:1,detail:1};
@@ -673,7 +675,7 @@ function loadXLSX(){
 /* ตรวจว่าไฟล์ที่จำเป็นอยู่ครบไหม — ใช้ตอนเกิดปัญหา */
 async function diagnose(){
   const out = [];
-  for (const f of ["index.html", XLSX_URL]){
+  for (const f of ["index.html", ...XLSX_CANDIDATES]){
     let ok = false;
     try { const r = await fetch(f, {method:"HEAD", cache:"no-cache"}); ok = r.ok; } catch(e){}
     out.push(`<div>${ok?"✓":"✗"} <code>${esc(f)}</code>${ok?"":" — ไม่พบไฟล์นี้"}</div>`);
@@ -718,15 +720,20 @@ async function load(opts){
 
   let key = null;
   if (!opts.file){
-    try {
-      const h = await fetch(XLSX_URL, {method:"HEAD", cache:"no-cache"});
-      if (h.ok){
+    let found = false;
+    for (const cand of XLSX_CANDIDATES){
+      try {
+        const h = await fetch(cand, {method:"HEAD", cache:"no-cache"});
+        if (!h.ok) continue;
+        XLSX_URL = cand; found = true;
         const et = h.headers.get("etag")||"", lm = h.headers.get("last-modified")||"",
               len = h.headers.get("content-length")||"";
-        SRC = {name: XLSX_URL.split("/").pop(), updated: lm, size: +len||0};
-        key = [et,lm,len,"v"+APP_VERSION].join("|");
-      }
-    } catch(e){ /* บางที่ไม่รองรับ HEAD — ข้ามการใช้ cache ไป */ }
+        SRC = {name: cand.split("/").pop(), path: cand, updated: lm, size: +len||0};
+        key = [cand,et,lm,len,"v"+APP_VERSION].join("|");
+        break;
+      } catch(e){ /* บางที่ไม่รองรับ HEAD — ลองตำแหน่งถัดไป */ }
+    }
+    if (!found) XLSX_URL = XLSX_CANDIDATES[0];
 
     if (key && !opts.force){
       stage("อ่านข้อมูลที่จำไว้", .1);
@@ -755,7 +762,7 @@ async function load(opts){
       const list = await diagnose();
       const box = $("#ld-fail").querySelector(".fail");
       if (box) box.innerHTML = `<b>${esc(e.message)}</b><br><br>ไฟล์ในโปรเจกต์:<br>${list}` +
-        `<br>อัปไฟล์ที่ขาดขึ้น repo แล้วลองใหม่`;
+        `<br>ต้องมีไฟล์ Excel อย่างน้อยหนึ่งในสองตำแหน่งนี้ (ชื่อไฟล์ต้องเป็น <code>TA100.xlsx</code> ตรงตัวพิมพ์ใหญ่เล็ก)`;
     }
   }
 }
