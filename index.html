@@ -219,7 +219,7 @@ var READ_OPTS = {type:"array", cellDates:false, cellText:false, cellNF:false, de
                  sheets:["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch"]};
 var AOA_OPTS  = {header:1, raw:true, defval:null};
 
-var ENGINE_VERSION = 8;
+var ENGINE_VERSION = 9;
 
 var TA_TIERS = [
   {name:"TA 1", min:95, inc: 6, gpct:1.000},
@@ -279,6 +279,9 @@ function hhmm(secs){
   var h = Math.floor(secs/3600) % 24, m = Math.floor(secs/60) % 60;
   return (h<10?"0":"")+h + ":" + (m<10?"0":"")+m;
 }
+/** -0.25 -> "−0.25" (ขึ้นต้นแต่ละบรรทัดของหมายเหตุ) */
+function fmtDed(v){ return "−" + Math.abs(v).toFixed(2); }
+
 /** "2026-08" จากปี/เดือน */
 function ymKey(y, m){ return y + "-" + (m<10?"0":"") + m; }
 
@@ -298,6 +301,7 @@ function buildDB(sheets, report){
   var P = headIdx(punch);
   var iDate = col(P,"work_date"), iTruck = col(P,"truck_no"), iDrv = col(P,"driver_no"),
       iPin = col(P,"punch_in_status"), iPout = col(P,"punch_out_status"),
+      iPinN = col(P,"punch_in_name"), iPoutN = col(P,"punch_out_name"),
       iDev = col(P,"device_no"), iCheck = col(P,"check_time"), iPlant = col(P,"plant_no"),
       iQty = col(P,"dp_dispatch_qty"), iCost = col(P,"partialtcost"),
       iPrev = col(P, null, "ดีพีใบสุดท้ายวันก่อน"),
@@ -498,11 +502,22 @@ function buildDB(sheets, report){
     var pre = 1 + ded;
     var net = pre < 0 ? 0 : (pre > 1 ? 1 : pre);
 
-    var rmk = [];
+    /* สาเหตุที่ทำให้ได้คะแนนไม่เต็ม 1 — ใช้ชื่อจาก punch_in_name / punch_out_name */
+    var why2 = [];
+    if (dIn < 0)
+      why2.push(fmtDed(dIn) + " " + (S(cell(p,iPinN)) || MEANING["punch_in_status|"+pin] || "มาสาย"));
+    if (dDev < 0)
+      why2.push(fmtDed(dDev) + " ไม่ได้ Punch ผ่าน SDA (" +
+                (MEANING["device_no|"+dev] || "ใช้ Web") + ")");
+    if (dOut < 0)
+      why2.push(fmtDed(dOut) + " " + (S(cell(p,iPoutN)) ||
+                MEANING["punch_out_status|"+pout] || (pout === "" ? "ไม่มีข้อมูล Punch out" : pout)));
+    if (dCt < 0) why2.push(fmtDed(dCt) + " " + (note || "ตรวจรถสาย"));
+
+    var rmk = why2.slice();
     var nMulti = multi[drv + "|" + ym + "|" + day];
-    if (nMulti) rmk.push("Driver Punch " + nMulti + " คัน");
-    if (note) rmk.push(note);
-    if (pout && FINE_ALL[pout]) rmk.push("ตัดทั้งโครงการ");
+    if (nMulti) rmk.push("• Driver Punch " + nMulti + " คันในวันเดียวกัน");
+    if (pout && FINE_ALL[pout]) rmk.push("• ตัดทั้งโครงการ");
 
     detail.push([ym, day, plantNo, truck, drv, dev, pin, pout, ctStat,
       ct == null ? "" : hhmm(ct), dIn, dDev, dOut, dCt,
@@ -537,7 +552,7 @@ function buildDB(sheets, report){
     var sc = 1 + ag.ded;
     mv.d[dd] = +(sc < 0 ? 0 : (sc > 1 ? 1 : sc)).toFixed(2);
     mv.q += ag.qty; mv.c += ag.cost;
-    if (ag.rmk.length) mv.r[dd] = ag.rmk.join(" / ");
+    if (ag.rmk.length) mv.r[dd] = ag.rmk.join("\n");
   }
 
   function regOf(tn, ym){
@@ -661,7 +676,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 11;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 12;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -1350,7 +1365,7 @@ function vScore(root){
   const der = derive(), cols = der.cols, multi = der.months.length > 1;
   kpiStrip(trucks());
   root.appendChild(hintBox(
-    "แต่ละช่องคือคะแนนของรถในวันนั้น (เต็ม 1 คะแนน/วัน) ช่องว่างคือวันที่ไม่มีการ Punch มุมขวาบนที่มีสามเหลี่ยมคือมีหมายเหตุ — วางเมาส์เพื่อดู"));
+    "แต่ละช่องคือคะแนนของรถในวันนั้น (เต็ม 1 คะแนน/วัน) ช่องว่างคือวันที่ไม่มีการ Punch · ช่องที่มีสามเหลี่ยมมุมขวาบนคือมีการหักคะแนน วางเมาส์เพื่อดูสาเหตุทั้งหมดของวันนั้น (วันเดียวอาจถูกหักได้หลายสาเหตุ)"));
   const list = sortBy(trucks(), SORT.score);
   if(!list.length){ root.appendChild(el("div","empty","ไม่พบรถที่ตรงกับตัวกรอง")); return; }
   const page = slice(list,"score");
@@ -1388,7 +1403,11 @@ function vScore(root){
         td.className = "d "+cls(v);
         td.textContent = v%1?nf(v,2):String(v);
         const rm = x.rmk[c.ym] && x.rmk[c.ym][c.day];
-        if(rm){ td.className+=" mk"; td.title = rm; }
+        if(rm){
+          td.className += " mk";
+          td.title = `${c.label} วันที่ ${c.day} · รถ ${x.truck} — ได้ ${nf(v,2)} คะแนน\n`+
+                     `${v < 1 ? "สาเหตุที่ถูกหัก:" : "หมายเหตุ:"}\n${rm}`;
+        }
       }
       tr.appendChild(td);
     });
