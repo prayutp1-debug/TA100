@@ -110,9 +110,7 @@ tbody tr:hover .sticky-l{background:#f4f8fd}
 .bar{height:17px;background:var(--rule-2);border-radius:2px;overflow:hidden}
 .bar i{display:block;height:100%}
 .bar.stack{display:flex}
-.bar.diverge{position:relative;display:flex;background:var(--rule-2)}
-.bar.diverge::before{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;
-  width:1px;background:var(--ink-3);opacity:.5}
+
 .bar-row .num{white-space:nowrap}
 .bar-row.wide{grid-template-columns:minmax(150px,260px) 1fr 150px}
 .bar-row.wide>div:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -661,7 +659,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 9;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 10;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -1246,13 +1244,12 @@ function vOverview(root){
     const row = el("div","bar-row wide");
     const nm = el("div",null,k); nm.title = `${k} · ${n0(o.n)} คัน · ${n0(o.qty)} คิว`;
     row.appendChild(nm);
-    const bar = el("div","bar diverge");
-    const left = el("i","half"), right = el("i","half");
-    left.style.background = "transparent"; right.style.background = "transparent";
-    const w = Math.abs(o.net)/maxAbs*50;
-    if (neg){ left.style.marginLeft = (50-w)+"%"; left.style.width = w+"%"; left.style.background = "#cc3b30"; }
-    else { right.style.marginLeft = "50%"; right.style.width = w+"%"; right.style.background = "#2f9e5f"; }
-    bar.appendChild(left); bar.appendChild(right);
+    const bar = el("div","bar");
+    const fill = el("i");
+    fill.style.width = (Math.abs(o.net)/maxAbs*100) + "%";
+    fill.style.minWidth = "3px";
+    fill.style.background = neg ? "#cc3b30" : "#2f9e5f";
+    bar.appendChild(fill);
     bar.title = `เงินรางวัล ${n0(o.inc)} + ส่วนต่างการันตี ${n0(o.gar)} = สุทธิ ${n0(o.net)} บาท`;
     row.appendChild(bar);
     const val = el("div","num"+(neg?" neg":""), n0(o.net));
@@ -1264,7 +1261,7 @@ function vOverview(root){
     vens.length > TOPN
       ? `แสดง ${TOPN/2} อันดับสูงสุดและ ${TOPN/2} อันดับต่ำสุด จากทั้งหมด ${n0(vens.length)} ราย`
       : `ทั้งหมด ${n0(vens.length)} ราย`));
-  note.appendChild(el("span","muted","แท่ง = รางวัลสุทธิ (เงินรางวัล + ส่วนต่างการันตี) · วางเมาส์เพื่อดูรายละเอียด"));
+  note.appendChild(el("span","muted","ความยาวแท่ง = ขนาดของรางวัลสุทธิ (เงินรางวัล + ส่วนต่างการันตี) · เขียว = ได้รับ, แดง = ถูกหัก · วางเมาส์เพื่อดูรายละเอียด"));
   vb.appendChild(note);
   const p1c = panel("เงินรางวัล TA100 รายผู้รับเหมา", `${rangeLabel()} · หน่วยบาท`, vb);
   p1c.querySelector(".scroll").style.maxHeight="none";
