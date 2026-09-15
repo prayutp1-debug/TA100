@@ -149,6 +149,7 @@ tbody tr:hover .sticky-l{background:#f4f8fd}
   <div class="hd-actions" id="hd-actions" hidden>
     <button id="btn-reload" title="อ่านไฟล์ Excel จาก GitHub ใหม่ ไม่ใช้ข้อมูลที่จำไว้">โหลดข้อมูลใหม่</button>
     <button id="btn-pick" title="ทดลองกับไฟล์ในเครื่องก่อนอัปขึ้น GitHub">ใช้ไฟล์ Excel อื่น</button>
+    <button id="btn-json" title="อัปไฟล์นี้ขึ้น repo แล้วทุกคนจะเปิด Dashboard ได้ใน 1-2 วินาที">บันทึก TA100.json</button>
     <input type="file" id="file-input" accept=".xlsx,.xlsm" hidden>
   </div>
   <div class="kpis" id="kpis"></div>
@@ -166,6 +167,7 @@ tbody tr:hover .sticky-l{background:#f4f8fd}
     <p id="ld-sub">อ่านไฟล์ Excel จาก GitHub แล้วคำนวณคะแนนในเบราว์เซอร์</p>
     <div class="prog"><i id="ld-bar"></i></div>
     <div class="stage"><span id="ld-stage">เริ่มต้น…</span><span class="num" id="ld-pct"></span></div>
+    <div class="stage"><span class="muted" style="font-size:11.5px" id="ld-ver"></span></div>
     <div id="ld-fail"></div>
   </div>
 </div>
@@ -594,6 +596,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
   var boom = function(msg){ self.postMessage({type:"error", message:msg}); };
   var mb   = function(n){ return (n/1048576).toFixed(1); };
 
+  var SRC_SIZE = 0;
   var run = function(buf){
     try {
       say("กำลังแกะไฟล์ Excel", .2);
@@ -609,6 +612,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
       wb = null;
       var db = buildDB(sheets, function(t, p){ say(t, p); });
       sheets = null;
+      db.meta.src_size = SRC_SIZE || 0;
       say("กำลังส่งผลลัพธ์", .97);
       self.postMessage({type:"done", json: JSON.stringify(db)});
     } catch (err){ boom(err && err.message ? err.message : String(err)); }
@@ -616,6 +620,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 
   self.onmessage = function(e){
     var msg = e.data;
+    SRC_SIZE = msg.size || 0;
     if (msg.buffer) return run(msg.buffer);
     var xhr = new XMLHttpRequest();
     xhr.open("GET", msg.url, true);
@@ -639,9 +644,12 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 5;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 6;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
+// ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
+const JSON_CANDIDATES = ["data/TA100.json", "TA100.json"];
+let LAST_JSON = null;
 let XLSX_URL = XLSX_CANDIDATES[0];
 let D = null, DETAIL = null, TAB = "overview", SRC = {};
 const F = {division:"",dept:"",sect:"",plant:"",vendor:"",tier:"",q:""};
@@ -717,8 +725,8 @@ function computeFrom(source){
       else if (m.type === "error"){ w.terminate(); no(new Error(m.message)); }
     };
     w.onerror = ()=>{ w.terminate(); computeMain(source).then(ok,no); };
-    source.buffer ? w.postMessage({buffer:source.buffer},[source.buffer])
-                  : w.postMessage({url:source.url});
+    source.buffer ? w.postMessage({buffer:source.buffer, size:source.size||0},[source.buffer])
+                  : w.postMessage({url:source.url, size:source.size||0});
   });
 }
 
@@ -753,6 +761,7 @@ async function computeMain(source){
   const sheets = {};
   NEEDED.forEach(n=>{ sheets[n] = XLSX.utils.sheet_to_json(wb.Sheets[n], AOA_OPTS); });
   const db = buildDB(sheets, (t,p)=>stage(t,p));
+  db.meta.src_size = source.size || 0;
   stage("กำลังจัดเก็บผลลัพธ์", .97); await pause();
   return JSON.stringify(db);
 }
@@ -763,20 +772,23 @@ async function load(opts){
   $("#overlay").hidden = false;
   $("#ld-fail").innerHTML = ""; $("#ld-bar").parentElement.hidden = false;
   $("#ld-title").textContent = "กำลังเตรียมข้อมูล";
+  $("#ld-ver").textContent = "เวอร์ชัน " + APP_VERSION;
   stage("เริ่มต้น…", .02);
 
   let key = null;
   if (!opts.file){
-    let found = false;
+    let found = false, srcLen = 0;
     for (const cand of XLSX_CANDIDATES){
       try {
         const h = await fetch(cand, {method:"HEAD", cache:"no-cache"});
         if (!h.ok) continue;
         XLSX_URL = cand; found = true;
-        const et = h.headers.get("etag")||"", lm = h.headers.get("last-modified")||"",
-              len = h.headers.get("content-length")||"";
-        SRC = {name: cand.split("/").pop(), path: cand, updated: lm, size: +len||0};
-        key = [cand,et,lm,len,"v"+APP_VERSION].join("|");
+        srcLen = +(h.headers.get("content-length")||0);
+        SRC = {name: cand.split("/").pop(), path: cand,
+               updated: h.headers.get("last-modified")||"", size: srcLen};
+        // ใช้ "ขนาดไฟล์" เป็นตัวชี้วัด ไม่ใช้ ETag เพราะ GitHub Pages
+        // เปลี่ยน ETag ทุกครั้งที่ push แม้ไฟล์ Excel ไม่ได้แก้
+        key = [cand, srcLen, "v"+APP_VERSION].join("|");
         break;
       } catch(e){ /* บางที่ไม่รองรับ HEAD — ลองตำแหน่งถัดไป */ }
     }
@@ -786,8 +798,31 @@ async function load(opts){
       stage("อ่านผลที่คำนวณไว้แล้ว", .5);
       try {
         const hit = await cacheGet(key);
-        if (hit){ boot(typeof hit === "string" ? JSON.parse(hit) : hit, true); return; }
+        if (hit){ LAST_JSON = hit; boot(JSON.parse(hit), true); return; }
       } catch(e){}
+    }
+
+    /* ไฟล์ JSON สำเร็จรูป — ใช้ได้ถ้าสร้างจากไฟล์ Excel ขนาดเดียวกัน */
+    if (!opts.force){
+      for (const jp of JSON_CANDIDATES){
+        try {
+          stage("กำลังโหลดไฟล์ข้อมูลสำเร็จรูป", .2);
+          const r = await fetch(jp, {cache:"no-cache"});
+          if (!r.ok) continue;
+          const txt = await r.text();
+          const db = JSON.parse(txt);
+          const size = db && db.meta ? db.meta.src_size : null;
+          if (srcLen && size && size !== srcLen){
+            stage("ไฟล์สำเร็จรูปไม่ตรงกับ Excel ปัจจุบัน — คำนวณใหม่", .22);
+            continue;
+          }
+          LAST_JSON = txt;
+          if (key) cachePut(key, txt).catch(()=>{});
+          SRC.json = jp;
+          boot(db, false);
+          return;
+        } catch(e){ /* ไม่มีไฟล์นี้ หรือไฟล์เสีย — ข้ามไป */ }
+      }
     }
   } else {
     SRC = {name: opts.file.name, updated: new Date(opts.file.lastModified).toUTCString(),
@@ -795,8 +830,11 @@ async function load(opts){
   }
 
   try {
-    const src = opts.file ? {buffer: await opts.file.arrayBuffer()} : {url: XLSX_URL};
+    const src = opts.file
+      ? {buffer: await opts.file.arrayBuffer(), size: opts.file.size}
+      : {url: XLSX_URL, size: SRC.size||0};
     const json = await computeFrom(src);
+    LAST_JSON = json;
     if (key) cachePut(key, json).catch(()=>{});
     stage("กำลังแสดงผล", .99);
     boot(JSON.parse(json), false);
@@ -832,6 +870,13 @@ function boot(db, cached){
     $("#btn-reload").onclick = ()=>load({force:true});
     $("#btn-pick").onclick = ()=>$("#file-input").click();
     $("#file-input").onchange = e=>{ if(e.target.files[0]) load({file:e.target.files[0]}); };
+    $("#btn-json").onclick = ()=>{
+      if (!LAST_JSON){ alert("ยังไม่มีข้อมูลให้บันทึก"); return; }
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([LAST_JSON], {type:"application/json"}));
+      a.download = "TA100.json"; a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+    };
   }
   const m = D.meta;
   $("#period").textContent = `${m.month_en} ${m.year} · วันทำงาน ${m.work_days} วัน`;
@@ -839,7 +884,7 @@ function boot(db, cached){
   $("#meta").innerHTML =
     `ที่มา ${esc(SRC.name||"TA100.xlsx")}${SRC.local?" (ไฟล์ในเครื่อง)":""} · ${n0(m.punch_rows)} แถว Punch<br>` +
     (upd && !isNaN(upd) ? `ไฟล์อัปเดต ${upd.toLocaleString("th-TH")}` : "") +
-    (cached ? " · ใช้ข้อมูลที่จำไว้" : "");
+    (cached ? " · ใช้ข้อมูลที่จำไว้" : SRC.json ? " · โหลดจากไฟล์ข้อมูลสำเร็จรูป" : "");
 
   const t = D.trucks, tot = a=>t.reduce((s,x)=>s+x[a],0);
   kpi([
