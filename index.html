@@ -194,7 +194,7 @@ var READ_OPTS = {type:"array", cellDates:false, cellText:false, cellNF:false, de
                  sheets:["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch","ค่าบริหารความพร้อม"]};
 var AOA_OPTS  = {header:1, raw:true, defval:null};
 
-var ENGINE_VERSION = 15;
+var ENGINE_VERSION = 16;
 
 var TA_TIERS = [
   {name:"TA 1", min:95, inc: 6, gpct:1.000, ready:true},
@@ -567,8 +567,7 @@ function buildDB(sheets, report){
     if (dIn < 0)
       why2.push(fmtDed(dIn) + " " + (S(cell(p,iPinN)) || MEANING["punch_in_status|"+pin] || "มาสาย"));
     if (dDev < 0)
-      why2.push(fmtDed(dDev) + " ไม่ใช้ SDA ตอน Punch in (" +
-                (MEANING["device_no|"+devIn] || "ใช้ Web") + ")");
+      why2.push(fmtDed(dDev) + " ไม่ใช้ SDA ตอน Punch in (device_in = " + devIn + ")");
     if (dOut < 0) why2.push(fmtDed(dOut) + " " + outWhy);
     if (dCt < 0) why2.push(fmtDed(dCt) + " " + (note || "ตรวจรถสาย"));
     for (var rq3=0; rq3<hitRmk.length; rq3++)
@@ -788,7 +787,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 19;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 20;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
