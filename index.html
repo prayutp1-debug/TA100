@@ -194,7 +194,7 @@ var READ_OPTS = {type:"array", cellDates:false, cellText:false, cellNF:false, de
                  sheets:["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch","ค่าบริหารความพร้อม"]};
 var AOA_OPTS  = {header:1, raw:true, defval:null};
 
-var ENGINE_VERSION = 16;
+var ENGINE_VERSION = 17;
 
 var TA_TIERS = [
   {name:"TA 1", min:95, inc: 6, gpct:1.000, ready:true},
@@ -264,6 +264,15 @@ function blankRemark(s){
 /** หมายเหตุ "ระบบคำนวณ" (สะกดผิดเป็น ระบบคำนวน ก็นับ) */
 function isAutoRemark(s){ return /^ระบบคำนว/.test(s); }
 
+/** กรณีโรงงานขอแก้ไข — Punch เวลา 00:00, สถานะปกติ, อุปกรณ์ว่างหรือ W
+    และมีหมายเหตุระบุเหตุผลไว้ (ที่ไม่ใช่ "ระบบคำนวณ") */
+function isPlantFix(dev, timeVal, status, rmk){
+  if (status !== "O") return false;
+  if (timeSecs(timeVal) !== 0) return false;
+  if (dev !== "" && dev !== "W") return false;
+  return rmk !== "" && !blankRemark(rmk) && !isAutoRemark(rmk);
+}
+
 /* ── ตัวคำนวณหลัก ──────────────────────────────────────────── */
 function buildDB(sheets, report){
   report = report || function(){};
@@ -305,7 +314,7 @@ function buildDB(sheets, report){
       iPin = col(P,"punch_in_status"), iPout = col(P,"punch_out_status"),
       iPinN = col(P,"punch_in_name"), iPoutN = col(P,"punch_out_name"),
       iInTime = col(P,"punch_in_time"), iOutTime = col(P,"punch_out_time"),
-      iOutRmk = col(P,"punch_out_adj_remark"),
+      iInRmk = col(P,"punch_in_adj_remark"), iOutRmk = col(P,"punch_out_adj_remark"),
       iCheck = col(P,"check_time"), iPlant = col(P,"plant_no"),
       iQty = col(P,"dp_dispatch_qty"), iCost = col(P,"partialtcost"),
       iDiv = col(P,"division_name"), iDept = col(P,"dept_name"), iSect = col(P,"sect_name"),
@@ -559,6 +568,13 @@ function buildDB(sheets, report){
       }
     }
 
+    /* โรงงานขอแก้ไข — ไม่หักคะแนนใด ๆ ของวันนั้น ให้เต็ม 1 คะแนน */
+    var inRmk = S(cell(p,iInRmk));
+    var fixIn  = isPlantFix(devIn,  cell(p,iInTime),  pin,  inRmk);
+    var fixOut = isPlantFix(devOut, cell(p,iOutTime), pout, outRmk);
+    var plantFix = fixIn || fixOut;
+    if (plantFix){ dIn = 0; dDev = 0; dOut = 0; dCt = 0; dRmk = 0; ctStat = "plant_fix"; }
+
     var ded = dIn + dDev + dOut + dCt + dRmk;
     var pre = 1 + ded;
     var net = pre < 0 ? 0 : (pre > 1 ? 1 : pre);
@@ -573,6 +589,12 @@ function buildDB(sheets, report){
     for (var rq3=0; rq3<hitRmk.length; rq3++)
       if (hitRmk[rq3].pts < 0)
         why2.push(fmtDed(hitRmk[rq3].pts) + " " + hitRmk[rq3].text + " (หมายเหตุ: " + outRmk + ")");
+
+    if (plantFix){
+      why2.length = 0;
+      why2.push("• โรงงานขอแก้ไข — ไม่หักคะแนน (หมายเหตุ: " +
+                (fixIn ? inRmk : outRmk) + ")");
+    }
 
     var rmk = why2.slice();
     var nMulti = multi[drv + "|" + ym + "|" + day];
@@ -787,7 +809,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 20;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 21;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -1713,7 +1735,8 @@ function vDetail(root){
   const page = slice(sorted,"detail");
 
   const CT = {on_time:"ตรวจตรงเวลา",late_shift:"ตรวจรถสาย (เกินเวลาเข้างาน+30 น.)",
-              skip_late:"ไม่คิดซ้ำ (หักมาสายไปแล้ว)",no_check:"ไม่ตรวจรถทั้งวัน"};
+              skip_late:"ไม่คิดซ้ำ (หักมาสายไปแล้ว)",no_check:"ไม่ตรวจรถทั้งวัน",
+              plant_fix:"โรงงานขอแก้ไข (ไม่หักคะแนน)"};
   const cols = [];
   if (multi) cols.push(["ym","เดือน","c"]);
   cols.push(["day","วันที่","c"],["plant_no","รหัสโรงงาน","t"],["truck","truck_no","t"],
@@ -1832,6 +1855,18 @@ function vRules(root){
     </ul>
     <p style="margin:6px 0 0">ถ้า <b>punch_out_status ไม่ใช่ O</b> (ไม่ว่า device_out จะเป็น M หรือ W)
     ให้หักตามรหัสในตารางคะแนน Punch เช่นรหัส B = รถเสีย : ระบบไฟ/ระบบแอร์/ระบบน้ำ หัก 0.5</p>
+
+    <p style="margin:14px 0 0"><b>กรณีโรงงานขอแก้ไข — ได้เต็ม 1 คะแนน ไม่หักอะไรเลย</b></p>
+    <p style="margin:6px 0 0">ถ้าฝั่ง Punch in หรือ Punch out ฝั่งใดฝั่งหนึ่งเข้าเงื่อนไขครบทุกข้อ
+    ถือว่าโรงงานขอแก้ไข วันนั้นได้ 1 คะแนนเต็ม แม้ช่อง check_time จะว่าง (ไม่ได้ตรวจรถ)</p>
+    <ul style="margin:6px 0 0;padding-left:20px">
+      <li><b>device_in / device_out</b> เป็น W หรือว่าง</li>
+      <li><b>punch_in_time / punch_out_time</b> = 00:00</li>
+      <li><b>punch_in_status / punch_out_status</b> = O</li>
+      <li><b>punch_in_adj_remark / punch_out_adj_remark</b> ระบุเหตุผลไว้
+          (เช่น “โรงงานขอแก้ไข”, “วันหยุดประเพณี”) โดยต้องไม่ใช่คำว่า “ระบบคำนวณ”
+          และไม่ใช่การเคาะ จุด ขีด หรือ “ปกติ”</li>
+    </ul>
 
     <p style="margin:14px 0 0"><b>กฎที่ดูจากข้อความในช่อง punch_out_adj_remark</b></p>
     <p style="margin:6px 0 0">แถวในชีต <b>คะแนน-Punch</b> ที่ช่อง In/Out เป็น
@@ -1991,7 +2026,8 @@ function sheetSpec(){
       return !q || r[I.truck].toLowerCase().includes(q) || r[I.driver].toLowerCase().includes(q);
     });
     const CT = {on_time:"ตรวจตรงเวลา",late_shift:"ตรวจรถสาย (เกินเวลาเข้างาน+30 น.)",
-                skip_late:"ไม่คิดซ้ำ (หักมาสายไปแล้ว)",no_check:"ไม่ตรวจรถทั้งวัน"};
+                skip_late:"ไม่คิดซ้ำ (หักมาสายไปแล้ว)",no_check:"ไม่ตรวจรถทั้งวัน",
+              plant_fix:"โรงงานขอแก้ไข (ไม่หักคะแนน)"};
     const at = k=>(r=>r[I[k]]);
     return {name:"รายละเอียด Punch", rows, freeze:0, cols:[
       {l:"เดือน", t:"str", w:9, align:"center", f:at("ym")},
