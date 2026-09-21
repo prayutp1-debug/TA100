@@ -145,11 +145,92 @@ table.two-head thead tr:first-child th{background:var(--band-2)}
   padding:10px 12px;font-size:12.5px;margin-top:14px;color:#8c2a20}
 .loader .row{display:flex;gap:8px;margin-top:14px}
 .empty{padding:40px;text-align:center;color:var(--ink-3)}
+
+/* ── เข้าสู่ระบบ ───────────────────────────────────── */
+body.locked header, body.locked .wrap{display:none !important}
+#login{position:fixed;inset:0;z-index:150;display:flex;align-items:center;justify-content:center;
+  padding:18px;background:var(--band-grad)}
+.login-card{width:100%;max-width:392px;background:#fff;border-radius:18px;padding:26px 24px 22px;
+  box-shadow:0 24px 60px rgba(15,23,42,.35)}
+.login-card h1{margin:0 0 4px;font-size:21px;font-weight:700}
+.login-card p.sub{margin:0 0 20px;color:var(--ink-3);font-size:13px}
+.f2{margin-bottom:13px}
+.f2 label{display:block;font-size:12.5px;color:var(--ink-3);margin-bottom:5px;font-weight:500}
+.f2 input{width:100%;padding:11px 12px;border:1.5px solid var(--rule);border-radius:10px;outline:none;
+  transition:border-color .15s}
+.f2 input:focus{border-color:var(--link);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.row-between{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:4px 0 16px}
+.check{display:flex;align-items:center;gap:7px;color:var(--ink-3);font-size:13px;cursor:pointer}
+.btn-primary{width:100%;padding:12px;border:0;border-radius:10px;background:var(--band-grad);
+  color:#fff;font-weight:600;cursor:pointer;transition:filter .15s}
+.btn-primary:hover{filter:brightness(1.07)}
+.btn-primary[disabled]{opacity:.6;cursor:not-allowed}
+.msg{margin-top:12px;font-size:13px;padding:9px 11px;border-radius:9px;display:none}
+.msg.err{display:block;background:#fee2e2;color:#991b1b}
+.msg.info{display:block;background:#dbeafe;color:#1e40af}
+.linkbtn{display:block;margin:11px auto 0;background:none;border:0;color:#6366f1;font-size:13px;
+  cursor:pointer;text-decoration:underline}
+.linkbtn:hover{color:#4338ca}
+.pwwrap{position:relative;display:block}
+.pwwrap input{padding-right:42px !important}
+.eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;padding:7px;
+  line-height:0;cursor:pointer;color:var(--ink-3);border-radius:8px}
+.eye:hover{color:var(--ink);background:#eef2fb}
+.eye:focus-visible{outline:2px solid var(--link);outline-offset:1px}
+.eye svg{width:19px;height:19px;display:block}
+#pwmodal{position:fixed;inset:0;z-index:160;display:flex;align-items:center;justify-content:center;
+  background:rgba(15,23,42,.5);padding:18px}
+#pwmodal .box{background:#fff;border-radius:16px;padding:22px 22px 18px;max-width:392px;width:100%;
+  box-shadow:0 20px 50px rgba(15,23,42,.32)}
+#pwmodal h3{margin:0 0 4px;font-size:18px;font-weight:700}
+#pwmodal .sub{margin:0 0 16px;font-size:12.5px;color:var(--ink-3);line-height:1.6}
+.pwbtns{display:flex;gap:9px;margin-top:14px}
+.pwbtns .btn{flex:1;padding:11px}
+.pwbtns .btn-primary{flex:1.6}
+.chip{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:999px;
+  padding:4px 11px;font-size:12px;color:#fff;max-width:240px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
 @media print{header,nav,.filters,.pager{display:none}.scroll{max-height:none;overflow:visible}}
 @media (max-width:640px){.wrap{padding:12px}.hd-top .meta{margin-left:0;text-align:left}}
 </style>
 </head>
 <body>
+
+<div id="login" hidden>
+  <form class="login-card" id="loginForm" autocomplete="on">
+    <h1>TA รถโม่</h1>
+    <p class="sub">คะแนนวันทำงานและรางวัลของรถโม่ CPAC</p>
+    <div class="f2">
+      <label for="u">ผู้ใช้งาน</label>
+      <input id="u" name="username" type="text" autocomplete="username" placeholder="รหัส Vendor หรือชื่อผู้ใช้" required>
+    </div>
+    <div class="f2">
+      <label for="p">รหัสผ่าน</label>
+      <input id="p" name="password" type="password" autocomplete="current-password" placeholder="รหัสผ่าน" required>
+    </div>
+    <div class="row-between">
+      <label class="check"><input type="checkbox" id="remember"> จำการเข้าสู่ระบบ</label>
+      <span style="font-size:12px;color:var(--ink-3)" id="userStat">กำลังโหลดรายชื่อผู้ใช้…</span>
+    </div>
+    <button class="btn-primary" id="loginBtn" type="submit">เข้าสู่ระบบ</button>
+    <button type="button" class="linkbtn" id="pwOpenLogin">เปลี่ยนรหัสผ่าน</button>
+    <div class="msg" id="loginMsg"></div>
+  </form>
+</div>
+
+<div id="pwmodal" hidden><div class="box">
+  <h3>เปลี่ยนรหัสผ่าน</h3>
+  <p class="sub">รหัสผ่านใหม่จะถูกบันทึกลงกูเกิลชีตกลาง และใช้ได้กับทุกเว็บแอปที่ใช้รายชื่อผู้ใช้ชุดนี้</p>
+  <div class="f2"><label for="pwUser">ผู้ใช้งาน</label><input id="pwUser" type="text" autocomplete="username"></div>
+  <div class="f2"><label for="pwOld">รหัสผ่านเดิม</label><input id="pwOld" type="password" autocomplete="current-password"></div>
+  <div class="f2"><label for="pwNew">รหัสผ่านใหม่</label><input id="pwNew" type="password" autocomplete="new-password"></div>
+  <div class="f2"><label for="pwNew2">ยืนยันรหัสผ่านใหม่</label><input id="pwNew2" type="password" autocomplete="new-password"></div>
+  <div class="msg" id="pwMsg"></div>
+  <div class="pwbtns">
+    <button type="button" class="btn" id="pwCancel">ยกเลิก</button>
+    <button type="button" class="btn-primary" id="pwSave">บันทึกรหัสผ่านใหม่</button>
+  </div>
+</div></div>
 
 <header>
   <div class="hd-top">
@@ -158,6 +239,10 @@ table.two-head thead tr:first-child th{background:var(--band-2)}
     <div class="meta" id="meta"></div>
   </div>
   <div class="hd-actions" id="hd-actions" hidden>
+    <span class="chip" id="whoChip"></span>
+    <span class="chip" id="roleChip"></span>
+    <button id="btn-pw" title="เปลี่ยนรหัสผ่านที่ใช้เข้าสู่ระบบ">เปลี่ยนรหัสผ่าน</button>
+    <button id="btn-logout" title="ออกจากระบบ">ออกจากระบบ</button>
     <button id="btn-reload" title="อ่านไฟล์ Excel จาก GitHub ใหม่ ไม่ใช้ข้อมูลที่จำไว้">โหลดข้อมูลใหม่</button>
     <button id="btn-pick" title="ทดลองกับไฟล์ในเครื่องก่อนอัปขึ้น GitHub">ใช้ไฟล์ Excel อื่น</button>
     <button id="btn-json" title="อัปไฟล์นี้ขึ้น repo แล้วทุกคนจะเปิด Dashboard ได้ใน 1-2 วินาที">บันทึก TA100.json</button>
@@ -172,7 +257,7 @@ table.two-head thead tr:first-child th{background:var(--band-2)}
   <div id="view"></div>
 </div>
 
-<div class="overlay" id="overlay">
+<div class="overlay" id="overlay" hidden>
   <div class="loader">
     <h3 id="ld-title">กำลังเตรียมข้อมูล</h3>
     <p id="ld-sub">อ่านไฟล์ Excel จาก GitHub แล้วคำนวณคะแนนในเบราว์เซอร์</p>
@@ -194,7 +279,7 @@ var READ_OPTS = {type:"array", cellDates:false, cellText:false, cellNF:false, de
                  sheets:["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch","ค่าบริหารความพร้อม"]};
 var AOA_OPTS  = {header:1, raw:true, defval:null};
 
-var ENGINE_VERSION = 17;
+var ENGINE_VERSION = 19;
 
 var TA_TIERS = [
   {name:"TA 1", min:95, inc: 6, gpct:1.000, ready:true},
@@ -261,6 +346,19 @@ function blankRemark(s){
   if (s === "ปกติ") return true;
   return /^[\s.,\-–—_*]*$/.test(s);
 }
+/* ข้อความที่ถือว่า "ไม่ยอมโยก" — เพิ่มรูปประโยคใหม่ได้ที่นี่ */
+var MOVE_REFUSE_RE = /ไม่\s*(ยอม|ยินยอม)?\s*โยก|ไม่\s*(ปฏิบัติ|ปฎิบัติ)[\s\S]{0,30}โยก|ปฏิเสธ[\s\S]{0,30}โยก|ไม่\s*ไป\s*โยก/;
+
+/** ดูจากหมายเหตุสองฝั่งว่าเป็นการโยกแบบไหน
+ *  "help"   = โยกมาช่วยงาน  -> ไม่หักเรื่องไม่ใช้ SDA (ข้ามโรงงานจึง Punch ด้วย M ไม่ได้)
+ *  "refuse" = ไม่ยอมโยกตามสั่ง -> หักตามเกณฑ์ (ค่าตั้งต้น 1 คะแนน)
+ *  ""       = ไม่เกี่ยวกับการโยก                                            */
+function moveKind(inRmk, outRmk){
+  var s = inRmk + " " + outRmk;
+  if (s.indexOf("โยก") === -1) return "";
+  return MOVE_REFUSE_RE.test(s) ? "refuse" : "help";
+}
+
 /** หมายเหตุ "ระบบคำนวณ" (สะกดผิดเป็น ระบบคำนวน ก็นับ) */
 function isAutoRemark(s){ return /^ระบบคำนว/.test(s); }
 
@@ -389,6 +487,11 @@ function buildDB(sheets, report){
       }
     }
   }
+  var DED_REFUSE = -1;
+  for (var rf=0; rf<rules.length; rf++)
+    if (rules[rf].meaning.indexOf("โยกรถตามสั่ง") !== -1 && rules[rf].pts < 0)
+      DED_REFUSE = rules[rf].pts;
+
   var DED_NO_CHECK  = SC.check_time["Blanks"]       != null ? SC.check_time["Blanks"] : -1;
   var DED_LATE      = SC.check_time[""]             != null ? SC.check_time[""] : -0.25;
   var DED_OUT_BLANK = SC.punch_out_status["Blanks"] != null ? SC.punch_out_status["Blanks"] : -1;
@@ -511,9 +614,15 @@ function buildDB(sheets, report){
     var devIn = S(cell(p,iDevIn)), devOut = S(cell(p,iDevOut));
     var plantNo = S(cell(p,iPlant));
     var outRmk = S(cell(p,iOutRmk));
+    var inRmk  = S(cell(p,iInRmk));
+
+    /* การโยกรถข้ามโรงงาน */
+    var mv2 = moveKind(inRmk, outRmk);
+    var moved = mv2 === "help";                       // โยกมาช่วยงาน = ยกเว้นเรื่อง SDA
+    var dRefuse = mv2 === "refuse" ? DED_REFUSE : 0;  // ไม่ยอมโยกตามสั่ง = หักตามเกณฑ์
 
     var dIn  = SC_IN[pin]   || 0;
-    var dDev = SC_DEV[devIn] || 0;
+    var dDev = moved ? 0 : (SC_DEV[devIn] || 0);
 
     /* ── punch out ── */
     var dOut = 0, outWhy = "";
@@ -532,7 +641,7 @@ function buildDB(sheets, report){
         }
       } else if (blankRemark(outRmk)){
         // ไม่ใช้ SDA + กลับก่อนเลิกงาน + ไม่ได้ระบุเหตุผล
-        if (early){
+        if (early && !moved){
           dOut = DED_SDA;
           outWhy = "ไม่ใช้ SDA ตอน Punch out และกลับก่อนเลิกงานโดยไม่ระบุเหตุผล" +
                    " (Punch out " + otTxt + " / เลิกงาน " + hhmm(po) + ")";
@@ -569,13 +678,12 @@ function buildDB(sheets, report){
     }
 
     /* โรงงานขอแก้ไข — ไม่หักคะแนนใด ๆ ของวันนั้น ให้เต็ม 1 คะแนน */
-    var inRmk = S(cell(p,iInRmk));
     var fixIn  = isPlantFix(devIn,  cell(p,iInTime),  pin,  inRmk);
     var fixOut = isPlantFix(devOut, cell(p,iOutTime), pout, outRmk);
     var plantFix = fixIn || fixOut;
-    if (plantFix){ dIn = 0; dDev = 0; dOut = 0; dCt = 0; dRmk = 0; ctStat = "plant_fix"; }
+    if (plantFix){ dIn = 0; dDev = 0; dOut = 0; dCt = 0; dRmk = 0; dRefuse = 0; ctStat = "plant_fix"; }
 
-    var ded = dIn + dDev + dOut + dCt + dRmk;
+    var ded = dIn + dDev + dOut + dCt + dRmk + dRefuse;
     var pre = 1 + ded;
     var net = pre < 0 ? 0 : (pre > 1 ? 1 : pre);
 
@@ -586,6 +694,11 @@ function buildDB(sheets, report){
       why2.push(fmtDed(dDev) + " ไม่ใช้ SDA ตอน Punch in (device_in = " + devIn + ")");
     if (dOut < 0) why2.push(fmtDed(dOut) + " " + outWhy);
     if (dCt < 0) why2.push(fmtDed(dCt) + " " + (note || "ตรวจรถสาย"));
+    var mvRmk = inRmk.indexOf("โยก") !== -1 ? inRmk : outRmk;
+    if (dRefuse < 0)
+      why2.push(fmtDed(dRefuse) + " ไม่โยกรถตามสั่ง (หมายเหตุ: " + mvRmk + ")");
+    else if (moved && (devIn === "W" || devOut === "W"))
+      why2.push("• รถโยกมาช่วยงาน — ไม่หักเรื่องไม่ใช้ SDA (หมายเหตุ: " + mvRmk + ")");
     for (var rq3=0; rq3<hitRmk.length; rq3++)
       if (hitRmk[rq3].pts < 0)
         why2.push(fmtDed(hitRmk[rq3].pts) + " " + hitRmk[rq3].text + " (หมายเหตุ: " + outRmk + ")");
@@ -809,7 +922,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 21;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 25;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -1026,6 +1139,13 @@ const TABS = [
 
 let MONTHS = [], DERIVED = null;
 
+/* สิทธิ์การมองเห็น — เทียบรหัสผู้ใช้กับ vendor_id ถ้าไม่ตรงจึงเทียบชื่อผู้รับเหมา */
+function canSee(x){
+  if (!SESSION || SESSION.all) return true;
+  if (x.vendor_id && SESSION.code && normUser(x.vendor_id) === normUser(SESSION.code)) return true;
+  return !!x.vendor && !!SESSION.name && normKey(x.vendor) === normKey(SESSION.name);
+}
+
 function boot(db, cached){
   const first = !D;
   D = db;
@@ -1042,6 +1162,8 @@ function boot(db, cached){
   if (first){
     $("#btn-reload").onclick = ()=>load({force:true});
     $("#btn-pick").onclick = ()=>$("#file-input").click();
+    $("#btn-pw").onclick = openPw;
+    $("#btn-logout").onclick = ()=>{ localStorage.removeItem(LS_KEY); location.reload(); };
     $("#file-input").onchange = e=>{ if(e.target.files[0]) load({file:e.target.files[0]}); };
     $("#btn-json").onclick = ()=>{
       if (!LAST_JSON){ alert("ยังไม่มีข้อมูลให้บันทึก"); return; }
@@ -1103,8 +1225,9 @@ function derive(){
   const workDays = rm.reduce((s,m)=>s+m.work_days, 0);
   const lastYM = rm.length ? rm[rm.length-1].year*12 + rm[rm.length-1].month : 0;
 
-  const trucks = [];
+  const trucks = [], allow = {};
   for (const t of D.trucks){
+    if (!canSee(t)) continue;
     let score = 0, qty = 0, cost = 0, gBase = 0, readyBase = 0;
     let gMissing = false, hit = false, zero = false;
     const zr = [], days = {}, rmk = {};
@@ -1126,7 +1249,8 @@ function derive(){
     const tier = tierOf(pct);
     const gAmount = +(gBase * tier.gpct/100).toFixed(2);
     const revenue = +cost.toFixed(2);
-    const incRate = zero ? 0 : tier.inc;
+    // ถูกตัดสิทธิ์ = ไม่ได้รางวัลบวก แต่ถ้าอยู่กลุ่ม TA 5 / TA 6 ยังต้องโดนหักตามอัตราติดลบ
+    const incRate = zero ? Math.min(0, tier.inc) : tier.inc;
     const incentive = +(incRate * qty).toFixed(2);
     const gTopup = +Math.max(0, gAmount - revenue).toFixed(2);
     const readyFee = tier.ready ? +readyBase.toFixed(2) : 0;
@@ -1145,10 +1269,12 @@ function derive(){
       ready_base:+readyBase.toFixed(2), ready:readyFee,
       net:+(incentive + gTopup + readyFee).toFixed(2)
     });
+    allow[t.truck] = 1;
   }
 
   const drivers = [];
   for (const dv of D.drivers){
+    if (!canSee(dv)) continue;
     const days = {}, why = {}; let total = 0;
     for (const k of keys){
       const mv = dv.m[k]; if (!mv) continue;
@@ -1163,7 +1289,7 @@ function derive(){
   const cols = [];
   rm.forEach(m=>{ for(let d=1; d<=m.days_in_month; d++) cols.push({ym:m.key, day:d, label:m.label}); });
 
-  DERIVED = {key, months:rm, keys, workDays, trucks, drivers, cols};
+  DERIVED = {key, months:rm, keys, workDays, trucks, drivers, cols, allow};
   return DERIVED;
 }
 
@@ -1307,6 +1433,12 @@ const TIER_COLOR = {"TA 1":"#10b981","TA 2":"#84cc16","TA 3":"#f59e0b",
 const KPI_COLOR = ["#fde047","#7dd3fc","#86efac","#fca5a5",
                    "#c4b5fd","#fdba74","#f9a8d4","#5eead4"];
 const tierTag = t=>`<span class="tier t${t.slice(-1)}">${esc(t)}</span>`;
+/* ข้อความเมื่อไม่มีข้อมูล — แยกกรณีผู้รับเหมาที่ไม่มีรถในระบบ */
+function emptyMsg(what){
+  if (SESSION && !SESSION.all && !derive().trucks.length)
+    return `ไม่พบข้อมูลของผู้รับเหมา “${SESSION.name}” (รหัส ${SESSION.code}) ในเดือนที่เลือก`;
+  return "ไม่พบ" + what + "ที่ตรงกับตัวกรอง";
+}
 function orgTd(v){ const td=el("td"); const s=el("span","trunc",v||""); s.title=v||""; td.appendChild(s); return td; }
 function hintBox(text){ return el("p","hint",text); }
 
@@ -1323,7 +1455,7 @@ function render(){
 function vOverview(root){
   const t = trucks();
   kpiStrip(t);
-  if(!t.length){ root.appendChild(el("div","empty","ไม่พบรถที่ตรงกับตัวกรอง")); return; }
+  if(!t.length){ root.appendChild(el("div","empty",emptyMsg("รถ"))); return; }
   const g = el("div","grid");
 
   /* 1a. การกระจายกลุ่ม TA (ภาพรวม) */
@@ -1509,7 +1641,7 @@ function vScore(root){
   root.appendChild(hintBox(
     "แต่ละช่องคือคะแนนของรถในวันนั้น (เต็ม 1 คะแนน/วัน) ช่องว่างคือวันที่ไม่มีการ Punch · ช่องที่มีสามเหลี่ยมมุมขวาบนคือมีการหักคะแนน วางเมาส์เพื่อดูสาเหตุทั้งหมดของวันนั้น (วันเดียวอาจถูกหักได้หลายสาเหตุ)"));
   const list = sortBy(trucks(), SORT.score);
-  if(!list.length){ root.appendChild(el("div","empty","ไม่พบรถที่ตรงกับตัวกรอง")); return; }
+  if(!list.length){ root.appendChild(el("div","empty",emptyMsg("รถ"))); return; }
   const page = slice(list,"score");
 
   const tb = el("table"); const thead = el("thead");
@@ -1581,7 +1713,7 @@ function vReward(root){
     `ส่วนต่างการันตี = ยอดการันตีตามกลุ่ม − รายได้ค่าขนส่งจริง (ถ้ารายได้เกินการันตี = 0) · `+
     `ค่าบริหารความพร้อม = เฉพาะรถกลุ่ม TA 1–TA 3 และโรงงานที่ Status เป็น Open`));
   const list = sortBy(trucks(), SORT.reward);
-  if(!list.length){ root.appendChild(el("div","empty","ไม่พบรถที่ตรงกับตัวกรอง")); return; }
+  if(!list.length){ root.appendChild(el("div","empty",emptyMsg("รถ"))); return; }
   const page = slice(list,"reward");
 
   const cols = [
@@ -1617,10 +1749,15 @@ function vReward(root){
     tr.appendChild(el("td","n",nf(x.pct,1)+"%"));
     const tt = el("td","c"); tt.innerHTML = tierTag(x.tier); tr.appendChild(tt);
     const rate = el("td","n",String(x.inc_rate));
-    if(x.zero){ rate.className += " neg"; rate.title = "ถูกตัดเงินรางวัล บาท/คิว เป็น 0 — "+x.zreason; }
+    if(x.zero){
+      rate.className += " neg";
+      rate.title = (x.inc_rate < 0
+        ? "ถูกตัดสิทธิ์เงินรางวัล และอยู่กลุ่ม "+x.tier+" จึงถูกหัก "+x.inc_rate+" บาท/คิว — "
+        : "ถูกตัดเงินรางวัล บาท/คิว เป็น 0 — ") + x.zreason;
+    }
     tr.appendChild(rate);
     const inc = el("td","n"+(x.incentive<0?" neg":""),nf(x.incentive));
-    if(x.zero) inc.title = "ถูกตัดเงินรางวัล บาท/คิว เป็น 0 — "+x.zreason;
+    if(x.zero) inc.title = rate.title;
     tr.appendChild(inc);
     const gb = el("td","n", x.g_missing? "—" : nf(x.g_base,0));
     if(x.g_missing) gb.title = "ไม่พบโรงงานนี้ในชีตการันตี";
@@ -1658,7 +1795,7 @@ function vFine(root){
   root.appendChild(hintBox(
     "ยอดหักรายวันมาจากรหัส punch_out_status ที่มีค่าปรับในชีต “คะแนน-Punch” · ช่องที่มีสามเหลี่ยมมุมขวาบน วางเมาส์เพื่อดูสาเหตุที่ถูกหักในวันนั้น"));
   const list = sortBy(drivers(), SORT.fine);
-  if(!list.length){ root.appendChild(el("div","empty","ไม่พบคนขับที่ตรงกับตัวกรอง")); return; }
+  if(!list.length){ root.appendChild(el("div","empty",emptyMsg("คนขับ"))); return; }
   const page = slice(list,"fine");
 
   const tb = el("table"); const thead = el("thead");
@@ -1714,9 +1851,10 @@ function vDetail(root){
   kpiStrip(trucks());
   const I = DETAIL.idx, q = F.q.toLowerCase();
   const inRange = {}; derive().keys.forEach(k=>inRange[k]=1);
+  const allow = derive().allow;
   const multi = derive().months.length > 1;
   const rows = DETAIL.rows.filter(r=>{
-    if(!inRange[r[I.ym]]) return false;
+    if(!inRange[r[I.ym]] || !allow[r[I.truck]]) return false;
     const o = DETAIL.org[r[I.truck]];
     if(!o || !matchOrg(o)) return false;
     if(F.tier){ const dt = derive().trucks.find(x=>x.truck===r[I.truck]); if(!dt || dt.tier!==F.tier) return false; }
@@ -1725,7 +1863,7 @@ function vDetail(root){
   });
   root.appendChild(hintBox(
     "หนึ่งแถวคือหนึ่งรายการ Punch — แสดงยอดหักแยกตามสาเหตุ และคะแนนสุทธิของรายการนั้น"));
-  if(!rows.length){ root.appendChild(el("div","empty","ไม่พบรายการที่ตรงกับตัวกรอง")); return; }
+  if(!rows.length){ root.appendChild(el("div","empty",emptyMsg("รายการ"))); return; }
 
   const sorted = rows.slice().sort((a,b)=>{
     const k = I[SORT.detail.k] ?? I.day, d = SORT.detail.d;
@@ -1851,7 +1989,8 @@ function vRules(root){
       <li>ช่อง punch_out_adj_remark ว่าง เคาะ จุด ขีด หรือ “ปกติ” →
           ถ้า punch_out_time <b>ก่อน</b>เวลาเลิกงาน หัก 0.25
           แต่ถ้าหลังเวลาเลิกงานแล้ว ไม่หักคะแนน</li>
-      <li>ระบุเหตุผลอื่น → ไม่หักคะแนน</li>
+      <li>ระบุเหตุผลอื่น หรือเป็นกรณีรถโยกมาช่วยงาน → ไม่หักคะแนน</li>
+      <li>Punch out หลังเวลาเลิกงานของโรงงานแล้ว ไม่ต้องระบุเหตุผลใด ๆ ก็ไม่หักคะแนน</li>
     </ul>
     <p style="margin:6px 0 0">ถ้า <b>punch_out_status ไม่ใช่ O</b> (ไม่ว่า device_out จะเป็น M หรือ W)
     ให้หักตามรหัสในตารางคะแนน Punch เช่นรหัส B = รถเสีย : ระบบไฟ/ระบบแอร์/ระบบน้ำ หัก 0.5</p>
@@ -1868,6 +2007,17 @@ function vRules(root){
           และไม่ใช่การเคาะ จุด ขีด หรือ “ปกติ”</li>
     </ul>
 
+    <p style="margin:14px 0 0"><b>การโยกรถข้ามโรงงาน</b></p>
+    <p style="margin:6px 0 0">ดูจากข้อความในช่อง punch_in_adj_remark หรือ punch_out_adj_remark
+    ที่มีคำว่า <b>“โยก”</b> แล้วแยกเป็นสองกรณี</p>
+    <ul style="margin:6px 0 0;padding-left:20px">
+      <li><b>โยกมาช่วยงาน</b> (เช่น “โยกย้ายรถไปวิ่งโรงงานอื่น”) →
+          <b>ไม่หักคะแนน</b>เรื่องไม่ใช้ SDA แม้ device_in หรือ device_out จะเป็น W
+          เพราะการโยกข้ามโรงงานทำให้ Punch ด้วย M ไม่ได้</li>
+      <li><b>ไม่ยอมโยกตามสั่ง</b> (เช่น “ไม่ปฏิบัติตามคำสั่งศูนย์ให้โยกโรงงาน”) →
+          <b>หัก 1 คะแนน</b></li>
+    </ul>
+
     <p style="margin:14px 0 0"><b>กฎที่ดูจากข้อความในช่อง punch_out_adj_remark</b></p>
     <p style="margin:6px 0 0">แถวในชีต <b>คะแนน-Punch</b> ที่ช่อง In/Out เป็น
     <b>punch_out_adj_remark</b> จะถูกใช้เป็นคำค้น ถ้าข้อความในช่องหมายเหตุมีคำนั้นอยู่
@@ -1881,8 +2031,9 @@ function vRules(root){
       <li>รถที่ข้อความในช่อง punch_out_adj_remark ตรงกับกฎที่ระบุว่า
           <b>“ตัดทั้งโครงการ”</b> เช่น ข้อร้องเรียน จบส.เป็นฝ่ายผิด</li>
     </ul>
-    <p style="margin:6px 0 0">ทั้งสองกรณี อัตราเงินรางวัลเป็น 0 บาท/คิว
-    แต่<b>ยังมีสิทธิ์ได้เงินการันตี</b>ถ้าคะแนนทั้งเดือนผ่านเกณฑ์</p>
+    <p style="margin:6px 0 0">กรณีเหล่านี้ไม่ได้รับเงินรางวัลแม้จะอยู่กลุ่ม TA 1–TA 3
+    แต่ถ้าคะแนนทั้งเดือนตกอยู่กลุ่ม <b>TA 5 (−3 บาท/คิว)</b> หรือ <b>TA 6 (−6 บาท/คิว)</b>
+    ยังต้องถูกหักตามอัตรานั้น และ<b>ยังมีสิทธิ์ได้เงินการันตี</b>ถ้าคะแนนผ่านเกณฑ์</p>
 
     <p style="margin:14px 0 0"><b>ค่าบริหารความพร้อม</b></p>
     <p style="margin:6px 0 0">รถที่อยู่กลุ่ม <b>TA 1, TA 2, TA 3</b> ได้ค่าบริหารความพร้อม
@@ -2019,7 +2170,7 @@ function sheetSpec(){
     const I = DETAIL.idx, q = F.q.toLowerCase();
     const inRange = {}; der.keys.forEach(k=>inRange[k]=1);
     const rows = DETAIL.rows.filter(r=>{
-      if(!inRange[r[I.ym]]) return false;
+      if(!inRange[r[I.ym]] || !der.allow[r[I.truck]]) return false;
       const o = DETAIL.org[r[I.truck]];
       if(!o || !matchOrg(o)) return false;
       if(F.tier){ const dt = der.trucks.find(x=>x.truck===r[I.truck]); if(!dt || dt.tier!==F.tier) return false; }
@@ -2127,7 +2278,320 @@ function exportXLSX(){
 }
 
 
-load();
+
+/* =========================================================================
+   เข้าสู่ระบบ — ใช้ฐานข้อมูลผู้ใช้ชุดเดียวกับเว็บแอปอื่น (กูเกิลชีต User)
+   แก้ได้ที่ 4 ตัวแปรนี้เท่านั้น
+   ========================================================================= */
+var USER_SHEET   = '1VA8TtpoOXfnKLNsJiGmmv65iUhL4tYIFpUOKcJwJf_E';  // กูเกิลชีตเก็บ user/password
+var USER_CSV_URL = '';                 // (ถ้ามี) ลิงก์ CSV จาก ไฟล์ > แชร์ > เผยแพร่ไปยังเว็บ
+var LOCAL_CSV    = 'users.csv';        // สำรอง: วางไฟล์ CSV ไว้โฟลเดอร์เดียวกับ index.html
+var API_URL      = 'https://script.google.com/macros/s/AKfycbw6vA73LZOb0xS2Vx-rTGTgQcr0vL4PGP_VKLORuGdnWelgydS3Zo090QDLiqj9_lQN/exec';
+var LS_KEY       = 'taDashAuth_v1';
+
+var gid = function(id){ return document.getElementById(id); };
+function txt(v){ return v==null ? '' : String(v).trim(); }
+function normKey(s){ return String(s==null?'':s).replace(/\s+/g,'').replace(/[.\-–—_]/g,'').toLowerCase(); }
+function normUser(s){ return String(s==null?'':s).trim().replace(/[,\s]/g,'').toLowerCase(); }
+var SESSION = null;
+
+/* CSV parser ที่รองรับ quote และขึ้นบรรทัดในเซลล์ */
+function parseCSV(text){
+  var rows=[],row=[],cur='',q=false,i=0;
+  text = text.replace(/^\uFEFF/,'');
+  while(i<text.length){
+    var c=text[i];
+    if(q){
+      if(c==='"'){ if(text[i+1]==='"'){cur+='"';i+=2;continue;} q=false;i++;continue; }
+      cur+=c;i++;continue;
+    }
+    if(c==='"'){q=true;i++;continue;}
+    if(c===','){row.push(cur);cur='';i++;continue;}
+    if(c==='\r'){i++;continue;}
+    if(c==='\n'){row.push(cur);rows.push(row);row=[];cur='';i++;continue;}
+    cur+=c;i++;
+  }
+  row.push(cur); rows.push(row);
+  return rows.filter(function(r){ return r.some(function(c){return String(c).trim()!=='';}); });
+}
+
+/* ── โหลดรายชื่อผู้ใช้ ─────────────────────────────────────── */
+var USERS = [], USER_SRC='', LOADLOG=[];
+
+function rowsToUsers(rows){
+  if(!rows||!rows.length) return null;
+  var head = rows[0].map(function(h){ return normKey(h); });
+  var iN=head.indexOf('name'), iU=head.indexOf('user'), iP=head.indexOf('password'), iS=head.indexOf('status');
+  if(iU<0||iP<0) return null;
+  var out=[];
+  for(var r=1;r<rows.length;++r){
+    var u=txt(rows[r][iU]); if(!u) continue;
+    out.push({ name:txt(iN>=0?rows[r][iN]:''), user:u, pass:txt(rows[r][iP]),
+               status:txt(iS>=0?rows[r][iS]:'').toUpperCase() });
+  }
+  return out.length?out:null;
+}
+function fetchCSVUsers(url,label){
+  return Promise.resolve().then(function(){ return fetch(url,{cache:'no-store'}); })
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
+    .then(function(t){
+      if(/^\s*<(!doctype|html)/i.test(t)) throw new Error('ได้หน้า HTML แทน CSV (ชีตอาจไม่เปิดสาธารณะ)');
+      var us=rowsToUsers(parseCSV(t));
+      if(!us) throw new Error('ไม่พบคอลัมน์ User/Password');
+      LOADLOG.push('✓ '+label);
+      return us;
+    })
+    .catch(function(e){ LOADLOG.push('✗ '+label+' — '+e.message); throw e; });
+}
+/* JSONP: ใช้ได้แม้เบราว์เซอร์บล็อก CORS */
+function jsonpUsers(sheetName){
+  var label='JSONP gviz'+(sheetName?' (sheet='+sheetName+')':'');
+  return new Promise(function(resolve,reject){
+    var cb='__gviz_'+Math.random().toString(36).slice(2);
+    var s=document.createElement('script');
+    var to=setTimeout(function(){ done(); LOADLOG.push('✗ '+label+' — หมดเวลา 10 วินาที'); reject(new Error('timeout')); },10000);
+    function done(){ clearTimeout(to); try{delete window[cb];}catch(e){window[cb]=undefined;} if(s.parentNode) s.parentNode.removeChild(s); }
+    window[cb]=function(res){
+      done();
+      try{
+        if(!res||!res.table) throw new Error('รูปแบบข้อมูลไม่ถูกต้อง');
+        var rows=[res.table.cols.map(function(c){ return normKey(c.label||c.id); })];
+        res.table.rows.forEach(function(r){
+          rows.push(r.c.map(function(c){
+            if(!c) return '';
+            if(typeof c.v==='number') return String(c.v);   // กันรหัส Vendor ถูกแปลงเป็นตัวเลข
+            return c.f!=null?c.f:(c.v!=null?c.v:'');
+          }));
+        });
+        var us=rowsToUsers(rows);
+        if(!us) throw new Error('ไม่พบคอลัมน์ User/Password');
+        LOADLOG.push('✓ '+label); resolve(us);
+      }catch(e){ LOADLOG.push('✗ '+label+' — '+e.message); reject(e); }
+    };
+    s.src='https://docs.google.com/spreadsheets/d/'+USER_SHEET+'/gviz/tq?tqx=out:json;responseHandler='+cb+
+          '&headers=1'+(sheetName?'&sheet='+encodeURIComponent(sheetName):'');
+    s.onerror=function(){ done(); LOADLOG.push('✗ '+label+' — เรียกไฟล์ไม่สำเร็จ'); reject(new Error('script error')); };
+    document.head.appendChild(s);
+  });
+}
+function loadRemoteUsers(){
+  var b='https://docs.google.com/spreadsheets/d/'+USER_SHEET;
+  var tries=[];
+  if(USER_CSV_URL) tries.push(function(){ return fetchCSVUsers(USER_CSV_URL,'CSV เผยแพร่ (ที่ตั้งค่าไว้)'); });
+  tries.push(function(){ return fetchCSVUsers(b+'/gviz/tq?tqx=out:csv&headers=1','CSV gviz'); });
+  tries.push(function(){ return fetchCSVUsers(b+'/gviz/tq?tqx=out:csv&headers=1&sheet=User','CSV gviz (sheet=User)'); });
+  tries.push(function(){ return fetchCSVUsers(b+'/pub?output=csv','CSV เผยแพร่ /pub'); });
+  tries.push(function(){ return fetchCSVUsers(b+'/pub?gid=0&single=true&output=csv','CSV เผยแพร่ /pub?gid=0'); });
+  tries.push(function(){ return jsonpUsers(''); });
+  tries.push(function(){ return jsonpUsers('User'); });
+  var i=0;
+  function next(){
+    if(i>=tries.length) return Promise.reject(new Error('ทุกวิธีไม่สำเร็จ'));
+    return tries[i++]().catch(function(){ return next(); });
+  }
+  return next();
+}
+function loadLocalUsers(){ return fetchCSVUsers(LOCAL_CSV+'?t='+Date.now(),'ไฟล์ '+LOCAL_CSV+' ในโฟลเดอร์เดียวกัน'); }
+function setUserStat(){
+  gid('userStat').textContent = USERS.length? ('ผู้ใช้ '+USERS.length+' รายการ · '+USER_SRC) : 'โหลดรายชื่อผู้ใช้ไม่สำเร็จ';
+}
+
+/* ── เรียก Apps Script แบบ JSONP ── */
+function api(params){
+  return new Promise(function(resolve,reject){
+    if(!API_URL) return reject(new Error('ยังไม่ได้ตั้งค่า API_URL'));
+    var cb='__api_'+Math.random().toString(36).slice(2);
+    var s=document.createElement('script');
+    var to=setTimeout(function(){ done(); reject(new Error('หมดเวลาเชื่อมต่อ')); },10000);
+    function done(){ clearTimeout(to); try{delete window[cb];}catch(e){window[cb]=undefined;} if(s.parentNode) s.parentNode.removeChild(s); }
+    window[cb]=function(res){ done(); resolve(res||{}); };
+    var q=Object.keys(params).map(function(k){ return encodeURIComponent(k)+'='+encodeURIComponent(params[k]); }).join('&');
+    s.src=API_URL+(API_URL.indexOf('?')>=0?'&':'?')+'callback='+cb+'&'+q+'&t='+Date.now();
+    s.onerror=function(){ done(); reject(new Error('เรียก API ไม่สำเร็จ')); };
+    document.head.appendChild(s);
+  });
+}
+
+/* ── เข้าสู่ระบบ ───────────────────────────────────────────── */
+function setMsg(t,cls){
+  var m=gid('loginMsg'); m.className='msg'+(cls?' '+cls:''); m.textContent=t;
+  if(!t) m.style.display='none';
+}
+function rememberCreds(u,p){
+  if(gid('remember').checked){
+    try{ localStorage.setItem(LS_KEY, btoa(unescape(encodeURIComponent(JSON.stringify({u:u,p:p}))))); }catch(e){}
+  } else localStorage.removeItem(LS_KEY);
+}
+function localFind(u,p){
+  return USERS.filter(function(x){ return normUser(x.user)===normUser(u) && String(x.pass).trim()===String(p).trim(); })[0];
+}
+/* ตรวจรหัสผ่าน: ใช้ Apps Script ก่อน ถ้าเรียกไม่ได้จึงเทียบกับรายชื่อที่โหลดไว้ */
+function verifyLogin(u,p){
+  if(!API_URL) return Promise.resolve({ok:!!localFind(u,p), local:true, hit:localFind(u,p)});
+  return api({action:'login',user:u,pass:p}).then(function(res){
+    if(res&&res.ok) return {ok:true, hit:{name:res.name||res.user||u, user:res.user||u, pass:p, status:res.status||''}};
+    if(res&&res.error==='invalid') return {ok:false, message:res.message};
+    var hit=localFind(u,p);
+    return {ok:!!hit, hit:hit, message:(res&&res.message)||''};
+  }).catch(function(){
+    var hit=localFind(u,p);
+    return {ok:!!hit, hit:hit, local:true};
+  });
+}
+function startSession(u){
+  SESSION={ name:u.name||u.user, code:u.user, status:u.status, all:/SCG/.test(u.status||'') };
+  gid('whoChip').textContent = SESSION.name;
+  gid('whoChip').title = 'ผู้ใช้ ' + SESSION.code + (SESSION.status? ' · '+SESSION.status : '');
+  gid('roleChip').textContent = SESSION.all ? 'SCG — ดูได้ทุกผู้รับเหมา' : 'ผู้รับเหมา — เห็นเฉพาะข้อมูลของตนเอง';
+  gid('roleChip').style.background = SESSION.all ? 'rgba(134,239,172,.22)' : 'rgba(253,224,71,.22)';
+  gid('login').hidden = true;
+  document.body.classList.remove('locked');
+  gid('hd-actions').hidden = false;
+  if (!DASH_STARTED){ DASH_STARTED = true; load(); }
+}
+var DASH_STARTED = false;
+
+/* ── เปลี่ยนรหัสผ่าน ───────────────────────────────────────── */
+function pwMsg(t,cls){ var m=gid('pwMsg'); m.className='msg'+(cls?' '+cls:''); m.textContent=t; if(!t) m.style.display='none'; }
+function openPw(){
+  gid('pwUser').value = SESSION? SESSION.code : gid('u').value.trim();
+  gid('pwOld').value=''; gid('pwNew').value=''; gid('pwNew2').value='';
+  resetEyes(['pwOld','pwNew','pwNew2']);
+  pwMsg('','');
+  if(!API_URL) pwMsg('ยังไม่ได้ตั้งค่า API_URL ในไฟล์ index.html จึงยังเปลี่ยนรหัสผ่านไม่ได้','err');
+  gid('pwmodal').hidden = false;
+  setTimeout(function(){ (gid('pwUser').value?gid('pwOld'):gid('pwUser')).focus(); },50);
+}
+function savePw(){
+  var u=gid('pwUser').value.trim(), o=gid('pwOld').value, n=gid('pwNew').value, n2=gid('pwNew2').value;
+  if(!u||!o||!n){ pwMsg('กรอกข้อมูลให้ครบทุกช่อง','err'); return; }
+  if(n!==n2){ pwMsg('รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน','err'); return; }
+  if(n.length<4){ pwMsg('รหัสผ่านใหม่ต้องยาวอย่างน้อย 4 ตัวอักษร','err'); return; }
+  if(n===o){ pwMsg('รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม','err'); return; }
+  gid('pwSave').disabled=true; gid('pwSave').textContent='กำลังบันทึก…'; pwMsg('กำลังบันทึกลงกูเกิลชีต…','info');
+  api({action:'changePassword',user:u,pass:o,newpass:n}).then(function(res){
+    gid('pwSave').disabled=false; gid('pwSave').textContent='บันทึกรหัสผ่านใหม่';
+    if(!res||!res.ok){ pwMsg((res&&res.message)||'เปลี่ยนรหัสผ่านไม่สำเร็จ','err'); return; }
+    if(res.saved===false){ pwMsg('เซิร์ฟเวอร์รับคำสั่งแล้วแต่เขียนลงชีตไม่สำเร็จ','err'); return; }
+    var row=USERS.filter(function(x){ return normUser(x.user)===normUser(u); })[0];
+    if(row) row.pass=n;
+    var saved=localStorage.getItem(LS_KEY);
+    if(saved){
+      try{
+        var o2=JSON.parse(decodeURIComponent(escape(atob(saved))));
+        if(normUser(o2.u)===normUser(u)) localStorage.setItem(LS_KEY, btoa(unescape(encodeURIComponent(JSON.stringify({u:o2.u,p:n})))));
+      }catch(e){}
+    }
+    gid('pwOld').value=''; gid('pwNew').value=''; gid('pwNew2').value='';
+    pwMsg('เปลี่ยนรหัสผ่านเรียบร้อย กำลังตรวจสอบซ้ำกับชีต…','info');
+    api({action:'login',user:u,pass:n}).then(function(chk){
+      if(chk&&chk.ok){
+        pwMsg('เปลี่ยนรหัสผ่านเรียบร้อย ใช้รหัสใหม่ได้ทันที','info');
+        setTimeout(function(){ gid('pwmodal').hidden = true; },2000);
+      } else pwMsg('บันทึกแล้วแต่ตรวจสอบซ้ำไม่ผ่าน กรุณาเปิดกูเกิลชีตตรวจสอบ','err');
+    }).catch(function(){ pwMsg('บันทึกสำเร็จแล้ว แต่ตรวจสอบซ้ำไม่สำเร็จ','info'); });
+  }).catch(function(err){
+    gid('pwSave').disabled=false; gid('pwSave').textContent='บันทึกรหัสผ่านใหม่';
+    pwMsg('เชื่อมต่อ Apps Script ไม่ได้ ('+err.message+') — ตรวจสอบ API_URL และตั้ง Deploy เป็น Anyone','err');
+  });
+}
+
+/* ── ปุ่มดวงตา เปิด/ปิดการดูรหัสผ่าน ───────────────────────── */
+var EYE_OPEN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12S5 5.5 12 5.5 22.5 12 22.5 12 19 18.5 12 18.5 1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3.2"/></svg>';
+var EYE_OFF ='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.9 5.7A9.8 9.8 0 0 1 12 5.5c7 0 10.5 6.5 10.5 6.5a17 17 0 0 1-3.4 4.2M6.3 7.8A17 17 0 0 0 1.5 12S5 18.5 12 18.5c1.6 0 3-.3 4.2-.8"/><path d="M9.8 9.8a3.2 3.2 0 0 0 4.4 4.4"/><path d="M3 3l18 18"/></svg>';
+function addEye(input){
+  if(!input||input.parentNode.classList.contains('pwwrap')) return;
+  var wrap=document.createElement('span'); wrap.className='pwwrap';
+  input.parentNode.insertBefore(wrap,input); wrap.appendChild(input);
+  var b=document.createElement('button');
+  b.type='button'; b.className='eye'; b.innerHTML=EYE_OPEN;
+  b.setAttribute('aria-label','แสดงรหัสผ่าน'); b.title='แสดงรหัสผ่าน';
+  b.addEventListener('click',function(){
+    var showing = input.type==='text';
+    input.type = showing? 'password' : 'text';
+    b.innerHTML = showing? EYE_OPEN : EYE_OFF;
+    var lbl = showing? 'แสดงรหัสผ่าน' : 'ซ่อนรหัสผ่าน';
+    b.setAttribute('aria-label',lbl); b.title=lbl;
+    input.focus();
+  });
+  wrap.appendChild(b);
+}
+/* ปิดการมองเห็นกลับทุกครั้งที่เปิดหน้าต่างใหม่ */
+function resetEyes(ids){
+  ids.forEach(function(id){
+    var el=gid(id); if(!el||el.type!=='text') return;
+    var b=el.parentNode.querySelector('.eye');
+    if(b) b.click();
+  });
+}
+
+/* ── เริ่มระบบ ─────────────────────────────────────────────── */
+function authBoot(){
+  document.body.classList.add('locked');
+  gid('login').hidden = false;
+  ['p','pwOld','pwNew','pwNew2'].forEach(function(id){ addEye(gid(id)); });
+
+  gid('loginForm').addEventListener('submit',function(e){
+    e.preventDefault();
+    var u=gid('u').value.trim(), p=gid('p').value;
+    if(!USERS.length&&!API_URL){ setMsg('ยังโหลดรายชื่อผู้ใช้ไม่สำเร็จ','err'); return; }
+    gid('loginBtn').disabled=true; gid('loginBtn').textContent='กำลังตรวจสอบ…'; setMsg('','');
+    verifyLogin(u,p).then(function(r){
+      gid('loginBtn').disabled=false; gid('loginBtn').textContent='เข้าสู่ระบบ';
+      if(!r.ok||!r.hit){ setMsg(r.message||'ผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง','err'); return; }
+      rememberCreds(r.hit.user,p);
+      setMsg('','');
+      startSession(r.hit);
+    });
+  });
+  gid('pwOpenLogin').addEventListener('click',openPw);
+  gid('pwCancel').addEventListener('click',function(){ gid('pwmodal').hidden = true; });
+  gid('pwSave').addEventListener('click',savePw);
+  gid('pwmodal').addEventListener('click',function(e){ if(e.target===this) this.hidden = true; });
+
+  var autoTried=false;
+  function autoLogin(){
+    if(SESSION||autoTried) return;
+    if(!USERS.length&&!API_URL) return;
+    var saved=localStorage.getItem(LS_KEY); if(!saved) return;
+    var o; try{ o=JSON.parse(decodeURIComponent(escape(atob(saved)))); }catch(e){ localStorage.removeItem(LS_KEY); return; }
+    autoTried=true;
+    verifyLogin(o.u,o.p).then(function(r){
+      if(r.ok&&r.hit){ gid('remember').checked=true; startSession(r.hit); }
+      else localStorage.removeItem(LS_KEY);
+    });
+  }
+  function gotUsers(us,src){
+    USERS=us; USER_SRC=src; setUserStat(); setMsg('','');
+    var old=gid('loginForm').querySelector('details'); if(old) old.remove();
+    autoLogin();
+  }
+  function fail(){
+    setUserStat();
+    setMsg('อ่านรายชื่อผู้ใช้ไม่ได้ทั้งจากกูเกิลชีตและไฟล์ '+LOCAL_CSV+' ในโฟลเดอร์','err');
+    var d=document.createElement('details');
+    d.style.marginTop='10px'; d.style.fontSize='12.5px'; d.style.color='#64748b';
+    d.innerHTML='<summary style="cursor:pointer">ดูรายละเอียดการเชื่อมต่อ</summary>'+
+      '<div style="margin-top:7px;line-height:1.7">'+LOADLOG.map(esc).join('<br>')+
+      '<br><br><b>วิธีแก้ที่เร็วที่สุด</b><br>'+
+      '1) เปิดกูเกิลชีต User → ไฟล์ → ดาวน์โหลด → CSV<br>'+
+      '2) เปลี่ยนชื่อไฟล์เป็น <b>'+esc(LOCAL_CSV)+'</b> แล้ววางไว้โฟลเดอร์เดียวกับ index.html</div>';
+    var old=gid('loginForm').querySelector('details'); if(old) old.remove();
+    gid('loginForm').appendChild(d);
+  }
+
+  var localDone=false, remoteDone=false;
+  loadLocalUsers().then(function(us){
+    localDone=true;
+    if(!USERS.length) gotUsers(us,'ไฟล์ '+LOCAL_CSV);
+  }).catch(function(){ localDone=true; if(remoteDone&&!USERS.length) fail(); });
+
+  loadRemoteUsers().then(function(us){
+    remoteDone=true; gotUsers(us,'กูเกิลชีต');
+  }).catch(function(){ remoteDone=true; if(localDone&&!USERS.length) fail(); });
+}
+
+authBoot();
 
 </script>
 </body>
