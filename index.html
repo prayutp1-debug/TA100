@@ -287,7 +287,7 @@ var READ_OPTS = {type:"array", cellDates:false, cellText:false, cellNF:false, de
                  sheets:["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch","ค่าบริหารความพร้อม"]};
 var AOA_OPTS  = {header:1, raw:true, defval:null};
 
-var ENGINE_VERSION = 19;
+var ENGINE_VERSION = 20;
 
 var TA_TIERS = [
   {name:"TA 1", min:95, inc: 6, gpct:1.000, ready:true},
@@ -634,6 +634,7 @@ function buildDB(sheets, report){
 
     /* ── punch out ── */
     var dOut = 0, outWhy = "";
+    var dDevOut = 0, devOutWhy = "";   // ยอดหักที่เกิดจาก device_out = W โดยเฉพาะ
     if (pout === ""){
       dOut = DED_OUT_BLANK; outWhy = "ไม่มีข้อมูล Punch out";
     } else if (pout === "O" && devOut === "W"){
@@ -650,9 +651,9 @@ function buildDB(sheets, report){
       } else if (blankRemark(outRmk)){
         // ไม่ใช้ SDA + กลับก่อนเลิกงาน + ไม่ได้ระบุเหตุผล
         if (early && !moved){
-          dOut = DED_SDA;
-          outWhy = "ไม่ใช้ SDA ตอน Punch out และกลับก่อนเลิกงานโดยไม่ระบุเหตุผล" +
-                   " (Punch out " + otTxt + " / เลิกงาน " + hhmm(po) + ")";
+          dDevOut = DED_SDA;
+          devOutWhy = "ไม่ใช้ SDA ตอน Punch out และกลับก่อนเลิกงานโดยไม่ระบุเหตุผล" +
+                      " (Punch out " + otTxt + " / เลิกงาน " + hhmm(po) + ")";
         }
       }
       // ระบุเหตุผลอื่น หรือ Punch out หลังเวลาเลิกงาน = ไม่หักคะแนน
@@ -689,9 +690,9 @@ function buildDB(sheets, report){
     var fixIn  = isPlantFix(devIn,  cell(p,iInTime),  pin,  inRmk);
     var fixOut = isPlantFix(devOut, cell(p,iOutTime), pout, outRmk);
     var plantFix = fixIn || fixOut;
-    if (plantFix){ dIn = 0; dDev = 0; dOut = 0; dCt = 0; dRmk = 0; dRefuse = 0; ctStat = "plant_fix"; }
+    if (plantFix){ dIn = 0; dDev = 0; dDevOut = 0; dOut = 0; dCt = 0; dRmk = 0; dRefuse = 0; ctStat = "plant_fix"; }
 
-    var ded = dIn + dDev + dOut + dCt + dRmk + dRefuse;
+    var ded = dIn + dDev + dDevOut + dOut + dCt + dRmk + dRefuse;
     var pre = 1 + ded;
     var net = pre < 0 ? 0 : (pre > 1 ? 1 : pre);
 
@@ -700,6 +701,7 @@ function buildDB(sheets, report){
       why2.push(fmtDed(dIn) + " " + (S(cell(p,iPinN)) || MEANING["punch_in_status|"+pin] || "มาสาย"));
     if (dDev < 0)
       why2.push(fmtDed(dDev) + " ไม่ใช้ SDA ตอน Punch in (device_in = " + devIn + ")");
+    if (dDevOut < 0) why2.push(fmtDed(dDevOut) + " " + devOutWhy);
     if (dOut < 0) why2.push(fmtDed(dOut) + " " + outWhy);
     if (dCt < 0) why2.push(fmtDed(dCt) + " " + (note || "ตรวจรถสาย"));
     var mvRmk = inRmk.indexOf("โยก") !== -1 ? inRmk : outRmk;
@@ -738,7 +740,7 @@ function buildDB(sheets, report){
     var tIn = timeSecs(cell(p,iInTime)), tOut = timeSecs(cell(p,iOutTime));
     detail.push([ym, day, plantNo, truck, drv, devIn, devOut,
       pin, tIn == null ? "" : hhmm(tIn), pout, tOut == null ? "" : hhmm(tOut),
-      ctStat, ct == null ? "" : hhmm(ct), dIn, dDev, dOut, dCt,
+      ctStat, ct == null ? "" : hhmm(ct), dIn, dDev, dDevOut, dOut, dCt,
       +net.toFixed(2), rmk.join(" / ")]);
 
     var ak = truck + "|" + ym + "|" + day, agg = dayAgg[ak];
@@ -861,7 +863,7 @@ function buildDB(sheets, report){
     detail: {
       cols: ["ym","day","plant_no","truck","driver","device_in","device_out",
              "pin","punch_in_time","pout","punch_out_time",
-             "ct_stat","check_time","d_in","d_dev","d_out","d_ct","net","remark"],
+             "ct_stat","check_time","d_in","d_dev","d_devout","d_out","d_ct","net","remark"],
       meaning: MEANING,
       rows: detail
     }
@@ -930,7 +932,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 26;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 27;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -1891,7 +1893,7 @@ function vDetail(root){
     ["pout","punch_out_status","c"],["punch_out_time","punch_out_time","c"],
     ["check_time","check_time","c"],["ct_stat","สถานะ check_time","t"],
     ["d_in","หัก punch_in","n"],["d_out","หัก punch_out","n"],["d_dev","หัก device_in","n"],
-    ["d_ct","หัก check_time","n"],["net","คะแนนสุทธิ","n"],["remark","หมายเหตุ","t"]);
+    ["d_devout","หัก device_out","n"],["d_ct","หัก check_time","n"],["net","คะแนนสุทธิ","n"],["remark","หมายเหตุ","t"]);
   const tb = el("table"); const hr = el("tr");
   cols.forEach(([k,l,a])=> hr.appendChild(headSort(el("th",a==="n"?"n":a==="c"?"c":"",l),"detail",k)));
   const th = el("thead"); th.appendChild(hr); tb.appendChild(th);
@@ -2205,6 +2207,7 @@ function sheetSpec(){
       {l:"หัก punch_in", t:"num2", w:12, f:at("d_in")},
       {l:"หัก punch_out", t:"num2", w:13, f:at("d_out")},
       {l:"หัก device_in", t:"num2", w:13, f:at("d_dev")},
+      {l:"หัก device_out", t:"num2", w:14, f:at("d_devout")},
       {l:"หัก check_time", t:"num2", w:14, f:at("d_ct")},
       {l:"คะแนนสุทธิ", t:"score", w:11, align:"center", f:at("net"),
        fill:v=>XC.score[v] || XC.score[0]},
