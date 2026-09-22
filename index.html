@@ -287,7 +287,7 @@ var READ_OPTS = {type:"array", cellDates:false, cellText:false, cellNF:false, de
                  sheets:["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch","ค่าบริหารความพร้อม"]};
 var AOA_OPTS  = {header:1, raw:true, defval:null};
 
-var ENGINE_VERSION = 20;
+var ENGINE_VERSION = 21;
 
 var TA_TIERS = [
   {name:"TA 1", min:95, inc: 6, gpct:1.000, ready:true},
@@ -495,10 +495,14 @@ function buildDB(sheets, report){
       }
     }
   }
-  var DED_REFUSE = -1;
-  for (var rf=0; rf<rules.length; rf++)
+  var DED_REFUSE = -1, MOVE_FINE = 0;
+  for (var rf=0; rf<rules.length; rf++){
     if (rules[rf].meaning.indexOf("โยกรถตามสั่ง") !== -1 && rules[rf].pts < 0)
       DED_REFUSE = rules[rf].pts;
+    var mf = parseFloat(String(rules[rf].fine).replace(/,/g,""));
+    if (!MOVE_FINE && rules[rf].meaning.indexOf("โยกรถ") !== -1 && mf > 0) MOVE_FINE = mf;
+  }
+  if (!MOVE_FINE) MOVE_FINE = FINE["8"] || 1000;
 
   var DED_NO_CHECK  = SC.check_time["Blanks"]       != null ? SC.check_time["Blanks"] : -1;
   var DED_LATE      = SC.check_time[""]             != null ? SC.check_time[""] : -0.25;
@@ -627,7 +631,7 @@ function buildDB(sheets, report){
     /* การโยกรถข้ามโรงงาน */
     var mv2 = moveKind(inRmk, outRmk);
     var moved = mv2 === "help";                       // โยกมาช่วยงาน = ยกเว้นเรื่อง SDA
-    var dRefuse = mv2 === "refuse" ? DED_REFUSE : 0;  // ไม่ยอมโยกตามสั่ง = หักตามเกณฑ์
+    var dRefuse = (mv2 === "refuse" && pout !== "8") ? DED_REFUSE : 0;  // ไม่ยอมโยก (ถ้าเป็นรหัส 8 อยู่แล้วไม่หักซ้ำ)
 
     var dIn  = SC_IN[pin]   || 0;
     var dDev = moved ? 0 : (SC_DEV[devIn] || 0);
@@ -752,12 +756,20 @@ function buildDB(sheets, report){
 
     if (drv){
       var fines = [];
+      /* ไม่โยกรถ / รหัส 8 ย้ายโรงงาน — เกิดอย่างใดอย่างหนึ่งหรือทั้งสองอย่าง หักครั้งเดียว */
+      var isMove = pout === "8" || mv2 === "refuse";
+      if (isMove){
+        var mvTxt = [];
+        if (pout === "8") mvTxt.push("รหัส 8 : " + (MEANING["punch_out_status|8"] || "ย้ายโรงงาน"));
+        if (mv2 === "refuse") mvTxt.push("ไม่โยกรถตามสั่ง (หมายเหตุ: " + (outRmk || inRmk) + ")");
+        fines.push([MOVE_FINE, mvTxt.join(" + ") + (mvTxt.length > 1 ? " — หักครั้งเดียว" : "")]);
+      }
       // ข้อความสาเหตุใช้ช่อง "ความหมายจากระบบ" ในชีต คะแนน-Punch
-      if (FINE[pout] > 0)
+      if (FINE[pout] > 0 && !(isMove && pout === "8"))
         fines.push([FINE[pout], "รหัส " + pout + " : " +
                     (MEANING["punch_out_status|"+pout] || S(cell(p,iPoutN)) || pout)]);
       for (var rq5=0; rq5<hitRmk.length; rq5++)
-        if (hitRmk[rq5].fine > 0)
+        if (hitRmk[rq5].fine > 0 && !(isMove && hitRmk[rq5].kw.indexOf("โยก") !== -1))
           fines.push([hitRmk[rq5].fine, hitRmk[rq5].text + " (หมายเหตุ: " + outRmk + ")"]);
       if (fines.length){
         var fr = fineRows[drv] || (fineRows[drv] = {});
@@ -932,7 +944,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 27;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 28;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -2024,9 +2036,12 @@ function vRules(root){
       <li><b>โยกมาช่วยงาน</b> (เช่น “โยกย้ายรถไปวิ่งโรงงานอื่น”) →
           <b>ไม่หักคะแนน</b>เรื่องไม่ใช้ SDA แม้ device_in หรือ device_out จะเป็น W
           เพราะการโยกข้ามโรงงานทำให้ Punch ด้วย M ไม่ได้</li>
-      <li><b>ไม่ยอมโยกตามสั่ง</b> (เช่น “ไม่ปฏิบัติตามคำสั่งศูนย์ให้โยกโรงงาน”) →
-          <b>หัก 1 คะแนน</b></li>
+      <li><b>ไม่ยอมโยกตามสั่ง</b> (เช่น “ไม่โยกรถ”, “ไม่ปฏิบัติตามคำสั่งศูนย์ให้โยกโรงงาน”) →
+          <b>หัก 1 คะแนน</b> และหักเงิน จบส. <b>1,000 บาท</b></li>
     </ul>
+    <p style="margin:6px 0 0">รหัส punch_out_status = <b>8 (ย้ายโรงงาน)</b> ก็คิดแบบเดียวกัน
+    คือหัก 1 คะแนน และหักเงิน จบส. 1,000 บาท ถ้าวันเดียวกันเกิดทั้งรหัส 8 และหมายเหตุไม่โยก
+    <b>หักครั้งเดียว</b> ค่าปรับอ่านจากชีต คะแนน-Punch</p>
 
     <p style="margin:14px 0 0"><b>กฎที่ดูจากข้อความในช่อง punch_out_adj_remark</b></p>
     <p style="margin:6px 0 0">แถวในชีต <b>คะแนน-Punch</b> ที่ช่อง In/Out เป็น
