@@ -284,18 +284,18 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 /* ตัวเลือกการอ่าน Excel — ปรับให้เร็วที่สุด: ไม่สร้าง text/format ของทุกเซลล์,
    อ่านเฉพาะชีตที่ใช้, เก็บแบบ dense แล้วดึงออกมาเป็น array ตรง ๆ */
 var READ_OPTS = {type:"array", cellDates:false, cellText:false, cellNF:false, dense:true,
-                 sheets:["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch","ค่าบริหารความพร้อม"]};
+                 sheets:["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch"]};
 var AOA_OPTS  = {header:1, raw:true, defval:null};
 
-var ENGINE_VERSION = 21;
+var ENGINE_VERSION = 23;
 
 var TA_TIERS = [
-  {name:"TA 1", min:95, inc: 6, gpct:1.000, ready:true},
-  {name:"TA 2", min:90, inc: 4, gpct:0.965, ready:true},
-  {name:"TA 3", min:85, inc: 2, gpct:0.930, ready:true},
-  {name:"TA 4", min:75, inc: 0, gpct:0,     ready:false},
-  {name:"TA 5", min:50, inc:-3, gpct:0,     ready:false},
-  {name:"TA 6", min:-1, inc:-6, gpct:0,     ready:false}
+  {name:"TA 1", min:95, inc: 6, gpct:1.000},
+  {name:"TA 2", min:90, inc: 4, gpct:0.965},
+  {name:"TA 3", min:85, inc: 2, gpct:0.930},
+  {name:"TA 4", min:75, inc: 0, gpct:0},
+  {name:"TA 5", min:50, inc:-3, gpct:0},
+  {name:"TA 6", min:-1, inc:-6, gpct:0}
 ];
 var LATE_GRACE_MIN = 30;   // กรณี Punch in ปกติ: check_time ต้องไม่เกินเวลาเข้างานโรงงาน + 30 นาที
 
@@ -383,8 +383,7 @@ function isPlantFix(dev, timeVal, status, rmk){
 function buildDB(sheets, report){
   report = report || function(){};
   var punch = sheets["Punch"], reg = sheets["จดทะเบียน"], gar = sheets["การันตี"],
-      wtime = sheets["เวลาทำงาน"], wdays = sheets["วันทำงาน"], rulesRaw = sheets["คะแนน-Punch"],
-      ready = sheets["ค่าบริหารความพร้อม"];
+      wtime = sheets["เวลาทำงาน"], wdays = sheets["วันทำงาน"], rulesRaw = sheets["คะแนน-Punch"];
 
   if (!punch || punch.length < 2) throw new Error("ไม่พบข้อมูลในชีต Punch");
 
@@ -560,12 +559,6 @@ function buildDB(sheets, report){
     var cOld = col(H, null, "รถเก่า"), cNew = col(H, null, "FLEET_TYPE_NO");
     return {old:+(cell(r,cOld)||0), t012:+(cell(r,cNew)||0)};
   });
-  var RF = readByPlant(ready, function(r,H){
-    var cAmt = col(H, null, "ค่าบริหารความพร้อม"), cSt = col(H,"Status");
-    var open = S(cell(r,cSt)).toLowerCase() === "open";
-    return {amt:+(cell(r,cAmt)||0), open:open};
-  });
-
   /* ── ทะเบียนรถ ── */
   var regByMonth = {}, regAny = {}, reportYM;
   if (reg && reg.length > 1){
@@ -616,7 +609,7 @@ function buildDB(sheets, report){
 
   /* ── คำนวณรายแถว ── */
   report("คำนวณคะแนนรายรายการ", .55);
-  var detail = [], dayAgg = {}, fineRows = {}, drvInfo = {}, forfeit = {};
+  var detail = [], dayAgg = {}, fineRows = {}, drvInfo = {}, forfeit = {}, movePen = {};
 
   for (var r0=1; r0<N; r0++){
     var p = punch[r0], day = days[r0], ym = yms[r0];
@@ -696,7 +689,14 @@ function buildDB(sheets, report){
     var plantFix = fixIn || fixOut;
     if (plantFix){ dIn = 0; dDev = 0; dDevOut = 0; dOut = 0; dCt = 0; dRmk = 0; dRefuse = 0; ctStat = "plant_fix"; }
 
-    var ded = dIn + dDev + dDevOut + dOut + dCt + dRmk + dRefuse;
+    /* device_in กับ device_out รวมกันหักได้ไม่เกิน 0.25 คะแนนต่อวัน
+       ถ้าเป็น W ทั้งสองฝั่ง ให้คิดฝั่ง Punch in ฝั่งเดียว */
+    var devCapped = false;
+    if (dDev < 0 && dDevOut < 0){ dDevOut = 0; devOutWhy = ""; devCapped = true; }
+    var devDed = Math.max(DED_SDA, dDev + dDevOut);
+    var othDed = dIn + dOut + dCt + dRmk + dRefuse;
+
+    var ded = othDed + devDed;
     var pre = 1 + ded;
     var net = pre < 0 ? 0 : (pre > 1 ? 1 : pre);
 
@@ -706,6 +706,8 @@ function buildDB(sheets, report){
     if (dDev < 0)
       why2.push(fmtDed(dDev) + " ไม่ใช้ SDA ตอน Punch in (device_in = " + devIn + ")");
     if (dDevOut < 0) why2.push(fmtDed(dDevOut) + " " + devOutWhy);
+    if (devCapped)
+      why2.push("• ไม่ใช้ SDA ทั้งตอน Punch in และ Punch out — หักรวมกันไม่เกิน 0.25 คะแนน/วัน");
     if (dOut < 0) why2.push(fmtDed(dOut) + " " + outWhy);
     if (dCt < 0) why2.push(fmtDed(dCt) + " " + (note || "ตรวจรถสาย"));
     var mvRmk = inRmk.indexOf("โยก") !== -1 ? inRmk : outRmk;
@@ -747,29 +749,34 @@ function buildDB(sheets, report){
       ctStat, ct == null ? "" : hhmm(ct), dIn, dDev, dDevOut, dOut, dCt,
       +net.toFixed(2), rmk.join(" / ")]);
 
+    /* ไม่โยกรถ หรือ รหัส 8 ย้ายโรงงาน — หักเงินรางวัลของรถคันนั้น วันละ 1 ครั้ง */
+    if (!plantFix && (pout === "8" || mv2 === "refuse")){
+      var mk2 = truck + "|" + ym, mpv = movePen[mk2] || (movePen[mk2] = {d:{}, n:{}});
+      if (!mpv.d[day]){
+        var mvTxt = [];
+        if (pout === "8") mvTxt.push("รหัส 8 : " + (MEANING["punch_out_status|8"] || "ย้ายโรงงาน"));
+        if (mv2 === "refuse") mvTxt.push("ไม่โยกรถตามสั่ง (หมายเหตุ: " + (outRmk || inRmk) + ")");
+        mpv.d[day] = MOVE_FINE;
+        mpv.n[day] = mvTxt.join(" + ");
+      }
+    }
+
     var ak = truck + "|" + ym + "|" + day, agg = dayAgg[ak];
-    if (!agg) agg = dayAgg[ak] = {ded:0, rmk:[], qty:0, cost:0};
-    agg.ded += ded;
+    if (!agg) agg = dayAgg[ak] = {ded:0, dev:0, rmk:[], qty:0, cost:0};
+    agg.ded += othDed;
+    agg.dev += devDed;
     agg.qty += (+cell(p,iQty) || 0);
     agg.cost += (+cell(p,iCost) || 0);
     for (var m3=0; m3<rmk.length; m3++) if (agg.rmk.indexOf(rmk[m3]) < 0) agg.rmk.push(rmk[m3]);
 
     if (drv){
       var fines = [];
-      /* ไม่โยกรถ / รหัส 8 ย้ายโรงงาน — เกิดอย่างใดอย่างหนึ่งหรือทั้งสองอย่าง หักครั้งเดียว */
-      var isMove = pout === "8" || mv2 === "refuse";
-      if (isMove){
-        var mvTxt = [];
-        if (pout === "8") mvTxt.push("รหัส 8 : " + (MEANING["punch_out_status|8"] || "ย้ายโรงงาน"));
-        if (mv2 === "refuse") mvTxt.push("ไม่โยกรถตามสั่ง (หมายเหตุ: " + (outRmk || inRmk) + ")");
-        fines.push([MOVE_FINE, mvTxt.join(" + ") + (mvTxt.length > 1 ? " — หักครั้งเดียว" : "")]);
-      }
       // ข้อความสาเหตุใช้ช่อง "ความหมายจากระบบ" ในชีต คะแนน-Punch
-      if (FINE[pout] > 0 && !(isMove && pout === "8"))
+      if (FINE[pout] > 0 && pout !== "8")
         fines.push([FINE[pout], "รหัส " + pout + " : " +
                     (MEANING["punch_out_status|"+pout] || S(cell(p,iPoutN)) || pout)]);
       for (var rq5=0; rq5<hitRmk.length; rq5++)
-        if (hitRmk[rq5].fine > 0 && !(isMove && hitRmk[rq5].kw.indexOf("โยก") !== -1))
+        if (hitRmk[rq5].fine > 0 && hitRmk[rq5].kw.indexOf("โยก") === -1)
           fines.push([hitRmk[rq5].fine, hitRmk[rq5].text + " (หมายเหตุ: " + outRmk + ")"]);
       if (fines.length){
         var fr = fineRows[drv] || (fineRows[drv] = {});
@@ -796,7 +803,7 @@ function buildDB(sheets, report){
     var pcs = ak2.split("|"), tn2 = pcs[0], ym2 = pcs[1], dd = +pcs[2], ag = dayAgg[ak2];
     var tv = trucksMap[tn2] || (trucksMap[tn2] = {});
     var mv = tv[ym2] || (tv[ym2] = {d:{}, r:{}, q:0, c:0});
-    var sc = 1 + ag.ded;
+    var sc = 1 + ag.ded + Math.max(DED_SDA, ag.dev);   // เพดานหักอุปกรณ์ 0.25/วัน
     mv.d[dd] = +(sc < 0 ? 0 : (sc > 1 ? 1 : sc)).toFixed(2);
     mv.q += ag.qty; mv.c += ag.cost;
     if (ag.rmk.length) mv.r[dd] = ag.rmk.join("\n");
@@ -818,16 +825,19 @@ function buildDB(sheets, report){
     mk.forEach(function(ym3){
       var src = perMonth[ym3];
       var gm = lookup(G, ym3, info.plant_no);
-      var rfv = lookup(RF, ym3, info.plant_no);
+
       var fk2 = forfeit[tn + "|" + ym3];
+      var mp2 = movePen[tn + "|" + ym3];
+      var mpTot = 0, mpNote = [];
+      if (mp2) for (var dd2 in mp2.d){ mpTot += mp2.d[dd2]; mpNote.push("วันที่ " + dd2 + ": " + mp2.n[dd2]); }
       m[ym3] = {
         d: src.d, r: src.r,
         q: +src.q.toFixed(2), c: +src.c.toFixed(2),
         gb: gm ? gm.old : 0, gt: gm ? gm.t012 : 0, gm: gm ? 0 : 1,
-        rf: (rfv && rfv.open) ? rfv.amt : 0,
-        ro: rfv ? (rfv.open ? 1 : 0) : -1,
         z: fk2 ? 1 : 0,
-        zr: fk2 ? Object.keys(fk2).join(" / ") : ""
+        zr: fk2 ? Object.keys(fk2).join(" / ") : "",
+        mp: +mpTot.toFixed(2),
+        mpr: mpNote.join(" | ")
       };
     });
     return {
@@ -867,7 +877,7 @@ function buildDB(sheets, report){
       has_device_out: iDevOut >= 0
     },
     tiers: TA_TIERS.map(function(t){
-      return {name:t.name, min:t.min, inc:t.inc, gpct:+(t.gpct*100).toFixed(1), ready:t.ready};
+      return {name:t.name, min:t.min, inc:t.inc, gpct:+(t.gpct*100).toFixed(1)};
     }),
     rules: rules,
     trucks: trucks,
@@ -888,7 +898,7 @@ if (typeof module !== "undefined") module.exports = {buildDB:buildDB, ENGINE_VER
 /* ── ส่วนที่ทำงานเฉพาะตอนถูกเรียกเป็น Web Worker ── */
 if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
     && self instanceof WorkerGlobalScope) {
-  var NEEDED = ["Punch", "จดทะเบียน", "การันตี", "เวลาทำงาน", "วันทำงาน", "คะแนน-Punch", "ค่าบริหารความพร้อม"];
+  var NEEDED = ["Punch", "จดทะเบียน", "การันตี", "เวลาทำงาน", "วันทำงาน", "คะแนน-Punch"];
   var say  = function(stage, pct){ self.postMessage({type:"progress", stage:stage, pct:pct}); };
   var boom = function(msg){ self.postMessage({type:"error", message:msg}); };
   var mb   = function(n){ return (n/1048576).toFixed(1); };
@@ -944,7 +954,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 28;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 30;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -1055,7 +1065,7 @@ async function computeMain(source){
   }
   stage("กำลังแกะไฟล์ Excel", .2); await pause();
   const wb = XLSX.read(new Uint8Array(buf), READ_OPTS);
-  const NEEDED = ["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch","ค่าบริหารความพร้อม"];
+  const NEEDED = ["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch"];
   const miss = NEEDED.filter(n=>wb.SheetNames.indexOf(n)<0);
   if (miss.length) throw new Error("ไฟล์ Excel ไม่มีชีต: "+miss.join(", "));
   stage("กำลังอ่านข้อมูล", .33); await pause();
@@ -1250,9 +1260,9 @@ function derive(){
   const trucks = [], allow = {};
   for (const t of D.trucks){
     if (!canSee(t)) continue;
-    let score = 0, qty = 0, cost = 0, gBase = 0, readyBase = 0;
+    let score = 0, qty = 0, cost = 0, gBase = 0, movePen = 0;
     let gMissing = false, hit = false, zero = false;
-    const zr = [], days = {}, rmk = {};
+    const zr = [], mpr = [], days = {}, rmk = {};
     for (const k of keys){
       const mv = t.m[k]; if (!mv) continue;
       hit = true;
@@ -1261,9 +1271,10 @@ function derive(){
       qty += mv.q; cost += mv.c;
       const isT012 = t.fleet === "T012" && t.gt_ym != null && t.gt_ym >= lastYM;
       gBase += isT012 ? mv.gt : mv.gb;
-      readyBase += mv.rf || 0;
+      movePen += mv.mp || 0;
       if (mv.gm) gMissing = true;
       if (mv.z){ zero = true; if (mv.zr) zr.push(mv.zr); }
+      if (mv.mpr) mpr.push(mv.mpr);
     }
     if (!hit) continue;
     score = +score.toFixed(2);
@@ -1275,7 +1286,7 @@ function derive(){
     const incRate = zero ? Math.min(0, tier.inc) : tier.inc;
     const incentive = +(incRate * qty).toFixed(2);
     const gTopup = +Math.max(0, gAmount - revenue).toFixed(2);
-    const readyFee = tier.ready ? +readyBase.toFixed(2) : 0;
+    const penalty = +movePen.toFixed(2);
     trucks.push({
       truck:t.truck, division:t.division, dept:t.dept, sect:t.sect,
       plant_no:t.plant_no, plant:t.plant, vendor:t.vendor, vendor_id:t.vendor_id,
@@ -1288,8 +1299,8 @@ function derive(){
       inc_rate:incRate, base_rate:tier.inc, incentive,
       zero, zreason: zr.join(" / "),
       g_base:gBase, g_pct:tier.gpct, g_amount:gAmount, g_topup:gTopup,
-      ready_base:+readyBase.toFixed(2), ready:readyFee,
-      net:+(incentive + gTopup + readyFee).toFixed(2)
+      penalty, penalty_note: mpr.join(" | "),
+      net:+(incentive + gTopup - penalty).toFixed(2)
     });
     allow[t.truck] = 1;
   }
@@ -1585,16 +1596,16 @@ function vOverview(root){
   const by = {};
   t.forEach(x=>{
     const k = x.division||"(ไม่ระบุ)";
-    const o = by[k] || (by[k]={n:0,pct:0,qty:0,rev:0,inc:0,gar:0,rdy:0,net:0,ta1:0});
+    const o = by[k] || (by[k]={n:0,pct:0,qty:0,rev:0,inc:0,gar:0,pen:0,net:0,ta1:0});
     o.n++; o.pct+=x.pct; o.qty+=x.qty; o.rev+=x.revenue;
-    o.inc+=x.incentive; o.gar+=x.g_topup; o.rdy+=x.ready; o.net+=x.net;
+    o.inc+=x.incentive; o.gar+=x.g_topup; o.pen+=x.penalty; o.net+=x.net;
     if(x.tier==="TA 1") o.ta1++;
   });
   const tb = el("table");
   tb.innerHTML = `<thead><tr><th>กิจการ</th><th class="n">รถ</th><th class="n">%TA เฉลี่ย</th>
     <th class="n">TA 1</th><th class="n">คิวรวม</th><th class="n">รายได้ (บาท)</th>
     <th class="n">เงินรางวัล</th><th class="n">ส่วนต่างการันตี</th>
-    <th class="n">ค่าบริหารความพร้อม</th><th class="n">รางวัลสุทธิ</th></tr></thead>`;
+    <th class="n">หักไม่โยก/ย้ายโรงงาน</th><th class="n">รางวัลสุทธิ</th></tr></thead>`;
   const tbody = el("tbody");
   Object.entries(by).sort((a,b)=>b[1].net-a[1].net).forEach(([k,o])=>{
     const tr = el("tr");
@@ -1602,16 +1613,16 @@ function vOverview(root){
       <td class="n">${nf(o.pct/o.n,1)}%</td><td class="n">${n0(o.ta1)}</td>
       <td class="n">${n0(o.qty)}</td><td class="n">${n0(o.rev)}</td>
       <td class="n ${o.inc<0?"neg":""}">${n0(o.inc)}</td><td class="n">${n0(o.gar)}</td>
-      <td class="n">${n0(o.rdy)}</td><td class="n ${o.net<0?"neg":""}"><b>${n0(o.net)}</b></td>`;
+      <td class="n ${o.pen?"neg":""}">${o.pen?"−"+n0(o.pen):"0"}</td><td class="n ${o.net<0?"neg":""}"><b>${n0(o.net)}</b></td>`;
     tbody.appendChild(tr);
   });
-  const sum = {n:t.length,pct:t.reduce((s,x)=>s+x.pct,0),qty:0,rev:0,inc:0,gar:0,rdy:0,net:0,ta1:0};
-  t.forEach(x=>{sum.qty+=x.qty;sum.rev+=x.revenue;sum.inc+=x.incentive;sum.gar+=x.g_topup;sum.rdy+=x.ready;sum.net+=x.net;if(x.tier==="TA 1")sum.ta1++;});
+  const sum = {n:t.length,pct:t.reduce((s,x)=>s+x.pct,0),qty:0,rev:0,inc:0,gar:0,pen:0,net:0,ta1:0};
+  t.forEach(x=>{sum.qty+=x.qty;sum.rev+=x.revenue;sum.inc+=x.incentive;sum.gar+=x.g_topup;sum.pen+=x.penalty;sum.net+=x.net;if(x.tier==="TA 1")sum.ta1++;});
   const tr = el("tr"); tr.style.fontWeight="600"; tr.style.background="#eef2fb";
   tr.innerHTML = `<td>รวม</td><td class="n">${n0(sum.n)}</td><td class="n">${nf(sum.pct/sum.n,1)}%</td>
     <td class="n">${n0(sum.ta1)}</td><td class="n">${n0(sum.qty)}</td><td class="n">${n0(sum.rev)}</td>
     <td class="n ${sum.inc<0?"neg":""}">${n0(sum.inc)}</td><td class="n">${n0(sum.gar)}</td>
-    <td class="n">${n0(sum.rdy)}</td><td class="n"><b>${n0(sum.net)}</b></td>`;
+    <td class="n ${sum.pen?"neg":""}">${sum.pen?"−"+n0(sum.pen):"0"}</td><td class="n"><b>${n0(sum.net)}</b></td>`;
   tbody.appendChild(tr); tb.appendChild(tbody);
   const p2 = panel("สรุปตามกิจการ", rangeLabel(), tb);
   p2.style.gridColumn="1 / -1";
@@ -1650,7 +1661,7 @@ function kpiStrip(t){
     [n0(tot("qty")),"คิวรวม"],
     [n0(tot("incentive")),"เงินรางวัล (บาท)"],
     [n0(tot("g_topup")),"ส่วนต่างการันตี (บาท)"],
-    [n0(tot("ready")),"ค่าบริหารความพร้อม (บาท)"],
+    [n0(tot("penalty")),"หักเงินไม่โยก/ย้ายโรงงาน (บาท)"],
     [n0(tot("net")),"รางวัลสุทธิ (บาท)"]
   ].map(([v,l],i)=>`<div class="kpi"><b style="color:${KPI_COLOR[i%KPI_COLOR.length]}">${v}</b>`+
        `<span>${esc(l)}</span></div>`).join("");
@@ -1733,7 +1744,7 @@ function vReward(root){
   root.appendChild(hintBox(
     `%TA = คะแนนรวม ÷ วันทำงาน ${nf(der.workDays,0)} วัน (${rangeLabel()}) · เงินรางวัล = อัตราตามกลุ่ม × คิวรวม · `+
     `ส่วนต่างการันตี = ยอดการันตีตามกลุ่ม − รายได้ค่าขนส่งจริง (ถ้ารายได้เกินการันตี = 0) · `+
-    `ค่าบริหารความพร้อม = เฉพาะรถกลุ่ม TA 1–TA 3 และโรงงานที่ Status เป็น Open`));
+    `หักไม่โยก/ย้ายโรงงาน = 1,000 บาทต่อครั้ง`));
   const list = sortBy(trucks(), SORT.reward);
   if(!list.length){ root.appendChild(el("div","empty",emptyMsg("รถ"))); return; }
   const page = slice(list,"reward");
@@ -1745,7 +1756,7 @@ function vReward(root){
     ["pct","%TA","n"],["tier","กลุ่ม TA","c"],["inc_rate","อัตรา (บาท/คิว)","n"],
     ["incentive","เงินรางวัล","n"],["g_base","ฐานการันตี","n"],["g_pct","%การันตี","n"],
     ["g_amount","ยอดการันตี","n"],["g_topup","ส่วนต่างการันตี","n"],
-    ["ready","ค่าบริหารความพร้อม","n"],["net","รางวัลสุทธิ","n"]
+    ["penalty","หักไม่โยก/ย้ายโรงงาน","n"],["net","รางวัลสุทธิ","n"]
   ];
   const tb = el("table"); const hr = el("tr");
   cols.forEach(([k,l,a],i)=>{
@@ -1787,22 +1798,21 @@ function vReward(root){
     tr.appendChild(el("td","n",nf(x.g_pct,1)+"%"));
     tr.appendChild(el("td","n",nf(x.g_amount)));
     tr.appendChild(el("td","n",nf(x.g_topup)));
-    const rdy = el("td","n", nf(x.ready));
-    if(!x.ready && x.ready_base) rdy.title = "ได้เฉพาะกลุ่ม TA 1–TA 3 (คันนี้อยู่ "+x.tier+")";
-    else if(!x.ready_base) rdy.title = "โรงงานนี้ Status ไม่ใช่ Open ในชีตค่าบริหารความพร้อม";
-    tr.appendChild(rdy);
+    const pen = el("td","n"+(x.penalty?" neg":""), x.penalty? "−"+nf(x.penalty) : nf(0));
+    if(x.penalty) pen.title = "หักเงินรางวัลกรณีไม่โยกรถ / ย้ายโรงงาน\n"+x.penalty_note.split(" | ").join("\n");
+    tr.appendChild(pen);
     const net = el("td","n"+(x.net<0?" neg":""), nf(x.net));
     net.style.fontWeight="600"; tr.appendChild(net);
     tbody.appendChild(tr);
   });
-  const s = {qty:0,revenue:0,incentive:0,g_amount:0,g_topup:0,ready:0,net:0,score:0};
+  const s = {qty:0,revenue:0,incentive:0,g_amount:0,g_topup:0,penalty:0,net:0,score:0};
   list.forEach(x=>Object.keys(s).forEach(k=>s[k]+=x[k]));
   const tr = el("tr"); tr.style.fontWeight="600"; tr.style.background="#eef2fb";
   tr.innerHTML = `<td class="sticky-l">รวม ${n0(list.length)} คัน</td><td colspan="6"></td>
     <td class="n">${nf(s.score)}</td><td class="n">${nf(s.qty)}</td><td class="n">${nf(s.revenue)}</td>
     <td colspan="3"></td><td class="n ${s.incentive<0?"neg":""}">${nf(s.incentive)}</td>
     <td colspan="2"></td><td class="n">${nf(s.g_amount)}</td><td class="n">${nf(s.g_topup)}</td>
-    <td class="n">${nf(s.ready)}</td><td class="n">${nf(s.net)}</td>`;
+    <td class="n ${s.penalty?"neg":""}">${s.penalty?"−"+nf(s.penalty):nf(0)}</td><td class="n">${nf(s.net)}</td>`;
   tbody.appendChild(tr);
   tb.appendChild(tbody);
 
@@ -1940,7 +1950,7 @@ function vRules(root){
 
   const t1 = el("table");
   t1.innerHTML = `<thead><tr><th>กลุ่ม TA</th><th class="n">%TA</th><th class="n">เงินรางวัล (บาท/คิว)</th>
-    <th class="n">การันตี</th><th class="c">ค่าบริหารความพร้อม</th></tr></thead>`;
+    <th class="n">การันตี</th></tr></thead>`;
   const b1 = el("tbody");
   D.tiers.forEach((x,i)=>{
     const prev = D.tiers[i-1];
@@ -1948,7 +1958,7 @@ function vRules(root){
     const tr = el("tr");
     tr.innerHTML = `<td>${tierTag(x.name)}</td><td class="n">${range}</td>
       <td class="n ${x.inc<0?"neg":x.inc>0?"pos":""}">${x.inc}</td>
-      <td class="n">${x.gpct? x.gpct+"%":"—"}</td><td class="c">${x.ready?"✓":"—"}</td>`;
+      <td class="n">${x.gpct? x.gpct+"%":"—"}</td>`;
     b1.appendChild(tr);
   });
   t1.appendChild(b1);
@@ -1989,7 +1999,8 @@ function vRules(root){
     แล้วหักตามเหตุการณ์ที่พบ โดยหักได้ไม่เกิน 1 คะแนน และได้ไม่เกิน 1 คะแนนต่อวัน</p>
     <ol style="margin:0;padding-left:20px">
       <li>หักจาก <b>punch_in_status</b> (มาสาย T = −0.25)</li>
-      <li>หักจาก <b>device_in</b> (Punch in ผ่าน Web ไม่ใช้ SDA = −0.25)</li>
+      <li>หักจาก <b>device_in</b> / <b>device_out</b> (Punch ผ่าน Web ไม่ใช้ SDA = −0.25)
+          — ทั้งสองฝั่งรวมกัน<b>หักได้ไม่เกิน 0.25 คะแนนต่อวัน</b></li>
       <li>หักจาก <b>punch_out_status</b> ตามตารางคะแนนด้านบน (ว่าง = หนีงาน −1)</li>
       <li>หักจาก <b>check_time</b>: ไม่ตรวจรถทั้งวัน (ช่องว่าง) = −1</li>
     </ol>
@@ -2037,11 +2048,13 @@ function vRules(root){
           <b>ไม่หักคะแนน</b>เรื่องไม่ใช้ SDA แม้ device_in หรือ device_out จะเป็น W
           เพราะการโยกข้ามโรงงานทำให้ Punch ด้วย M ไม่ได้</li>
       <li><b>ไม่ยอมโยกตามสั่ง</b> (เช่น “ไม่โยกรถ”, “ไม่ปฏิบัติตามคำสั่งศูนย์ให้โยกโรงงาน”) →
-          <b>หัก 1 คะแนน</b> และหักเงิน จบส. <b>1,000 บาท</b></li>
+          <b>หัก 1 คะแนน</b> และหักเงินรางวัลของรถคันนั้น <b>1,000 บาท</b></li>
     </ul>
-    <p style="margin:6px 0 0">รหัส punch_out_status = <b>8 (ย้ายโรงงาน)</b> ก็คิดแบบเดียวกัน
-    คือหัก 1 คะแนน และหักเงิน จบส. 1,000 บาท ถ้าวันเดียวกันเกิดทั้งรหัส 8 และหมายเหตุไม่โยก
-    <b>หักครั้งเดียว</b> ค่าปรับอ่านจากชีต คะแนน-Punch</p>
+    <p style="margin:6px 0 0">รหัส punch_out_status = <b>8 (ย้ายโรงงาน)</b> คิดแบบเดียวกัน
+    ถ้าวันเดียวกันเกิดทั้งรหัส 8 และหมายเหตุไม่โยก <b>หักครั้งเดียว</b>
+    เงินที่หักไปแสดงในคอลัมน์ “หักไม่โยก/ย้ายโรงงาน” ของแท็บคำนวณรางวัล
+    และนำไปลบออกจากรางวัลสุทธิของรถคันนั้น (ไม่ได้หักที่ จบส.)
+    ค่าปรับอ่านจากชีต คะแนน-Punch</p>
 
     <p style="margin:14px 0 0"><b>กฎที่ดูจากข้อความในช่อง punch_out_adj_remark</b></p>
     <p style="margin:6px 0 0">แถวในชีต <b>คะแนน-Punch</b> ที่ช่อง In/Out เป็น
@@ -2060,12 +2073,6 @@ function vRules(root){
     แต่ถ้าคะแนนทั้งเดือนตกอยู่กลุ่ม <b>TA 5 (−3 บาท/คิว)</b> หรือ <b>TA 6 (−6 บาท/คิว)</b>
     ยังต้องถูกหักตามอัตรานั้น และ<b>ยังมีสิทธิ์ได้เงินการันตี</b>ถ้าคะแนนผ่านเกณฑ์</p>
 
-    <p style="margin:14px 0 0"><b>ค่าบริหารความพร้อม</b></p>
-    <p style="margin:6px 0 0">รถที่อยู่กลุ่ม <b>TA 1, TA 2, TA 3</b> ได้ค่าบริหารความพร้อม
-    ตามจำนวนเงินในชีต <b>ค่าบริหารความพร้อม</b> ช่อง “ค่าบริหารความพร้อม (บาท)”
-    เฉพาะโรงงานที่ช่อง <b>Status</b> เป็น <b>Open</b> เท่านั้น</p>
-    <p style="margin:10px 0 0">ถ้า driver_no หนึ่งคน Punch รถมากกว่า 1 คันในวันเดียวกัน
-    จะคิดคะแนนแยกตามเกณฑ์ของรถแต่ละคัน และกำกับหมายเหตุไว้ในช่องคะแนนวันนั้น</p>
     <p style="margin:10px 0 0">เมื่อเลือกช่วงมากกว่า 1 เดือน ระบบจะรวมคะแนนและคิวของทุกเดือนในช่วง
     แล้วคิด %TA จากวันทำงานรวมของช่วงนั้น ส่วนยอดการันตีจะรวมฐานการันตีของทุกเดือนในช่วง
     แล้วคูณ %การันตีตามกลุ่ม TA ที่ได้</p>`;
@@ -2160,7 +2167,8 @@ function sheetSpec(){
       {l:"%การันตี", t:"pct", w:10, f:x=>x.g_pct},
       {l:"ยอดการันตี", t:"money", w:14, f:x=>x.g_amount},
       {l:"ส่วนต่างการันตี", t:"money", w:15, f:x=>x.g_topup},
-      {l:"ค่าบริหารความพร้อม", t:"money", w:17, f:x=>x.ready},
+      {l:"หักไม่โยก/ย้ายโรงงาน", t:"money", w:18, f:x=>-x.penalty},
+      {l:"รายละเอียดที่ถูกหัก", t:"str", w:46, f:x=>x.penalty_note||""},
       {l:"รางวัลสุทธิ", t:"money", w:15, f:x=>x.net, bold:true},
       {l:"เหตุที่ตัดเงินรางวัล", t:"str", w:34, f:x=>x.zreason||""}
     ]};
