@@ -287,7 +287,7 @@ var READ_OPTS = {type:"array", cellDates:false, cellText:false, cellNF:false, de
                  sheets:["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch"]};
 var AOA_OPTS  = {header:1, raw:true, defval:null};
 
-var ENGINE_VERSION = 24;
+var ENGINE_VERSION = 25;
 
 var TA_TIERS = [
   {name:"TA 1", min:95, inc: 6, gpct:1.000},
@@ -365,6 +365,15 @@ function moveKind(inRmk, outRmk){
   var s = inRmk + " " + outRmk;
   if (s.indexOf("โยก") === -1) return "";
   return MOVE_REFUSE_RE.test(s) ? "refuse" : "help";
+}
+
+/** จัดกลุ่มช่อง "รถบัญชี" ในชีตจดทะเบียนให้เหลือสองแบบ
+ *  บัญชี2 / รถสำรอง / รถเสริม -> "รถเสริม" (ไม่มีสิทธิ์รางวัลและการันตี)
+ *  นอกนั้น (บัญชี1, บัญชีหลัก, รถหลัก ฯลฯ) -> "รถจดทะเบียน"                */
+function acctGroup(v){
+  var t = S(v);
+  if (!t) return "";
+  return /บัญชี\s*2|สำรอง|เสริม/.test(t) ? "รถเสริม" : "รถจดทะเบียน";
 }
 
 /* หมายเหตุที่ยืนยันว่า "ไม่ตรวจสภาพรถเกินเวลาเข้างาน" จริง — จึงหักมาสาย 0.25 */
@@ -862,8 +871,9 @@ function buildDB(sheets, report){
       division: info.division||"", dept: info.dept||"", sect: info.sect||"",
       plant_no: info.plant_no||"", plant: info.plant||"",
       vendor: info.vendor||"", vendor_id: info.vendor_id||"",
-      fleet: info.fleet||"", size: info.size||"", acct: info.acct||"",
-      spare: /สำรอง/.test(info.acct||""),
+      fleet: info.fleet||"", size: info.size||"",
+      acct: acctGroup(info.acct), acct_raw: info.acct||"",
+      spare: acctGroup(info.acct) === "รถเสริม",
       gt: info.gt||null, gt_ym: info.gt_ym||null,
       m: m
     };
@@ -972,7 +982,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 33;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 34;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -1311,7 +1321,8 @@ function derive(){
     trucks.push({
       truck:t.truck, division:t.division, dept:t.dept, sect:t.sect,
       plant_no:t.plant_no, plant:t.plant, vendor:t.vendor, vendor_id:t.vendor_id,
-      fleet:t.fleet, size:t.size, gt:t.gt, acct:t.acct||"", spare,
+      fleet:t.fleet, size:t.size, gt:t.gt,
+      acct:t.acct||"", acct_raw:t.acct_raw||"", spare,
       gt_ok: t.fleet === "T012" && t.gt_ym != null && t.gt_ym >= lastYM,
       g_missing: gMissing,
       days, rmk,
@@ -1765,7 +1776,7 @@ function vReward(root){
   root.appendChild(hintBox(
     `%TA = คะแนนรวม ÷ วันทำงาน ${nf(der.workDays,0)} วัน (${rangeLabel()}) · เงินรางวัล = อัตราตามกลุ่ม × คิวรวม · `+
     `ส่วนต่างการันตี = ยอดการันตีตามกลุ่ม − รายได้ค่าขนส่งจริง (ถ้ารายได้เกินการันตี = 0) · `+
-    `หักไม่โยก/ย้ายโรงงาน = 1,000 บาทต่อครั้ง · รถสำรองไม่มีสิทธิ์ได้เงินรางวัลและการันตี`));
+    `หักไม่โยก/ย้ายโรงงาน = 1,000 บาทต่อครั้ง · รถเสริมไม่มีสิทธิ์ได้เงินรางวัลและการันตี`));
   const list = sortBy(trucks(), SORT.reward);
   if(!list.length){ root.appendChild(el("div","empty",emptyMsg("รถ"))); return; }
   const page = slice(list,"reward");
@@ -1794,7 +1805,9 @@ function vReward(root){
     tr.appendChild(orgTd(x.division)); tr.appendChild(orgTd(x.dept));
     tr.appendChild(orgTd(x.sect)); tr.appendChild(orgTd(x.plant)); tr.appendChild(orgTd(x.vendor));
     const ac = el("td","c",x.acct);
-    if(x.spare){ ac.className += " neg"; ac.title = "รถสำรอง — ไม่มีสิทธิ์ได้เงินรางวัลและการันตี"; }
+    ac.title = (x.spare ? "รถเสริม — ไม่มีสิทธิ์ได้เงินรางวัลและการันตี" : "รถจดทะเบียน")
+             + (x.acct_raw && x.acct_raw !== x.acct ? "\n(ในไฟล์ระบุว่า “"+x.acct_raw+"”)" : "");
+    if(x.spare) ac.className += " neg";
     tr.appendChild(ac);
     const f = el("td","c",x.fleet);
     if(x.fleet==="T012") f.title = x.gt_ok? `รถใหม่ GT ถึง ${x.gt} — ใช้เกณฑ์การันตี T012`
@@ -1806,7 +1819,7 @@ function vReward(root){
     tr.appendChild(el("td","n",nf(x.pct,1)+"%"));
     const tt = el("td","c"); tt.innerHTML = tierTag(x.tier); tr.appendChild(tt);
     const rate = el("td","n",String(x.inc_rate));
-    if(x.spare){ rate.title = "รถสำรอง — ไม่คิดเงินรางวัลทั้งบวกและลบ"; }
+    if(x.spare){ rate.title = "รถเสริม — ไม่คิดเงินรางวัลทั้งบวกและลบ"; }
     else if(x.zero){
       rate.className += " neg";
       rate.title = (x.inc_rate < 0
@@ -2075,11 +2088,15 @@ function vRules(root){
           และไม่หักเรื่องไม่ใช้ SDA ด้วยแม้ device_in จะเป็น W</li>
     </ul>
 
-    <p style="margin:14px 0 0"><b>รถสำรอง</b></p>
-    <p style="margin:6px 0 0">รถที่ช่อง <b>รถบัญชี</b> ในชีตจดทะเบียนระบุว่า “รถสำรอง”
-    คิดคะแนนวันทำงานและการหักเงินทุกหัวข้อเหมือนรถบัญชีอื่น
-    แต่<b>ไม่มีสิทธิ์ได้เงินรางวัลและการันตี</b>แม้จะได้ TA 1–TA 3
-    และไม่ถูกหักอัตราติดลบของ TA 5 / TA 6</p>
+    <p style="margin:14px 0 0"><b>ประเภทรถ (ช่อง “รถบัญชี” ในชีตจดทะเบียน)</b></p>
+    <ul style="margin:6px 0 0;padding-left:20px">
+      <li><b>รถจดทะเบียน</b> — ค่าเดิมในไฟล์ที่เป็น บัญชี1 / บัญชีหลัก / รถหลัก
+          คิดคะแนนและรางวัลตามปกติทุกหัวข้อ</li>
+      <li><b>รถเสริม</b> — ค่าเดิมในไฟล์ที่เป็น บัญชี2 / รถสำรอง
+          คิดคะแนนวันทำงานและการหักเงินทุกหัวข้อเหมือนรถจดทะเบียน
+          แต่<b>ไม่มีสิทธิ์ได้เงินรางวัลและการันตี</b>แม้จะได้ TA 1–TA 3
+          และไม่ถูกหักอัตราติดลบของ TA 5 / TA 6</li>
+    </ul>
 
     <p style="margin:14px 0 0"><b>การโยกรถข้ามโรงงาน</b></p>
     <p style="margin:6px 0 0">ดูจากข้อความในช่อง punch_in_adj_remark หรือ punch_out_adj_remark
@@ -2245,7 +2262,7 @@ function sheetSpec(){
     return {name:"คำนวณรางวัล", rows:sortBy(trucks(), SORT.reward), freeze:1, cols:[
       {l:"เบอร์รถ", t:"text", w:10, f:x=>x.truck},
       ...orgCols,
-      {l:"รถบัญชี", t:"str", w:10, align:"center", f:x=>x.acct},
+      {l:"รถบัญชี", t:"str", w:13, align:"center", f:x=>x.acct},
       {l:"FLEET_TYPE_NO", t:"str", w:14, align:"center", f:x=>x.fleet},
       {l:"วันหมดอายุ GT", t:"str", w:14, align:"center", f:x=>x.gt||""},
       {l:"คะแนนรวม", t:"num2", w:11, f:x=>x.score},
