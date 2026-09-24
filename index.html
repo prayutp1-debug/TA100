@@ -972,7 +972,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 32;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 33;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -2141,26 +2141,48 @@ const XB = (()=>{                  // เส้นตารางบางรอ
 const XFMT = {text:"@", str:null, int:"#,##0", money:"#,##0.00",
               num2:"0.00", pct:'0.0"%"', score:"0.00", fine:"#,##0"};
 
-/* ขนาดกล่อง comment ให้พอดีข้อความ — ตัวอักษร 8pt กว้างราว 4pt ต่อตัว บรรทัดสูง 11pt */
-const XW = 4.6, XLH = 11;
+/* ขนาดกล่อง comment ให้พอดีข้อความจริง
+   วัดความกว้างด้วย canvas โดยใช้ฟอนต์เดียวกับที่ Excel ใช้แสดง comment (Tahoma 8pt) */
+const XFONT = "8pt Tahoma, 'IBM Plex Sans Thai', sans-serif";
+const XLH = 11.5;                 // ความสูงบรรทัด (pt)
+const XPAD = 14;                  // ขอบในกล่อง (pt)
+let _mctx = null;
+function textWpt(str){
+  if (_mctx === null){
+    try {
+      const cv = document.createElement("canvas");
+      _mctx = cv.getContext("2d");
+      if (_mctx) _mctx.font = XFONT;
+    } catch(e){ _mctx = false; }
+  }
+  if (!_mctx) return str.length * 4.6;            // สำรอง: ประมาณจากจำนวนตัวอักษร
+  return _mctx.measureText(str).width * 0.75;     // px -> pt
+}
 function fitBox(cell, text, colsWch, ci){
   const lines = String(text).split("\n");
   let longest = 0;
-  lines.forEach(l=>{ if(l.length > longest) longest = l.length; });
-  const pw = Math.min(470, Math.max(150, Math.round(longest * XW) + 18));
-  const cpl = Math.max(10, Math.floor((pw - 24) / XW));
-  let rows = 0;
-  lines.forEach(l=>{ rows += Math.max(1, Math.ceil(l.length / cpl)); });
-  const ph = rows * XLH + 16;
+  const wds = lines.map(l=>{ const w = textWpt(l); if (w > longest) longest = w; return w; });
 
-  // แปลงความกว้างเป็นจำนวนคอลัมน์ที่ต้องกิน (คอลัมน์กว้าง wch ≈ 5.5pt ต่อ 1 ตัวอักษร)
+  const pw = Math.min(470, Math.max(130, Math.ceil(longest) + XPAD + 6));
+  const inner = pw - XPAD;
+  let rows = 0;
+  wds.forEach(w=>{ rows += Math.max(1, Math.ceil(w / inner)); });
+  const ph = Math.ceil(rows * XLH) + XPAD;
+
+  /* แปลงเป็นจำนวนคอลัมน์/แถวที่กล่องพาด
+     ความกว้างคอลัมน์ Excel: px = wch * 7 + 5 ; 1pt = 4/3 px ; แถวสูง 20px */
+  const needPx = pw * 4 / 3;
   let acc = 0, cw = 1;
-  for (let i = ci + 1; i < colsWch.length && acc < pw; i++){ acc += (colsWch[i] || 10) * 5.5; cw++; }
-  if (acc < pw) cw += Math.ceil((pw - acc) / 55);
+  for (let i = ci + 1; i < colsWch.length && acc < needPx; i++){
+    acc += (colsWch[i] || 10) * 7 + 5;
+    cw++;
+  }
+  if (acc < needPx) cw += Math.ceil((needPx - acc) / 75);
   cell.c.pw = pw;
   cell.c.ph = ph;
   cell.c.cw = cw;
-  cell.c.ch = Math.max(2, Math.ceil(ph / 15));
+  // ช่วง anchor ครอบคลุม (ch-1) แถว แถวละ 20px จึงต้องบวกหนึ่ง
+  cell.c.ch = 1 + Math.max(1, Math.ceil(ph * 4 / 3 / 20));
 }
 
 /* บีบข้อความ comment ให้อยู่ใน 4 บรรทัด (หัวเรื่อง 1 + เหตุผล 3) */
