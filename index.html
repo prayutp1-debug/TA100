@@ -92,6 +92,7 @@ tbody tr:hover .sticky-l{background:#eaf1ff}
 
 /* คะแนนในตาราง */
 .d{text-align:center;font-variant-numeric:tabular-nums;min-width:32px;padding:4px 3px}
+.d.qt{min-width:56px;font-size:11.5px;letter-spacing:-.2px}
 .v100{background:var(--s100)} .v75{background:var(--s75)} .v50{background:var(--s50)}
 .v25{background:var(--s25)} .v0{background:var(--s0)}
 .mk{position:relative}
@@ -287,7 +288,7 @@ var READ_OPTS = {type:"array", cellDates:false, cellText:false, cellNF:false, de
                  sheets:["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch"]};
 var AOA_OPTS  = {header:1, raw:true, defval:null};
 
-var ENGINE_VERSION = 25;
+var ENGINE_VERSION = 26;
 
 var TA_TIERS = [
   {name:"TA 1", min:95, inc: 6, gpct:1.000},
@@ -434,6 +435,7 @@ function buildDB(sheets, report){
       iInRmk = col(P,"punch_in_adj_remark"), iOutRmk = col(P,"punch_out_adj_remark"),
       iCheck = col(P,"check_time"), iPlant = col(P,"plant_no"),
       iQty = col(P,"dp_dispatch_qty"), iCost = col(P,"partialtcost"),
+      iTrip = col(P,"ดีพีในวัน"),
       iDiv = col(P,"division_name"), iDept = col(P,"dept_name"), iSect = col(P,"sect_name"),
       iPlantN = col(P,"plant_name"), iVid = col(P,"vendor_id"), iVn = col(P,"vendor_name");
   if (iDate < 0 || iTruck < 0) throw new Error("ชีต Punch ไม่มีคอลัมน์ work_date หรือ truck_no");
@@ -788,11 +790,13 @@ function buildDB(sheets, report){
     }
 
     var ak = truck + "|" + ym + "|" + day, agg = dayAgg[ak];
-    if (!agg) agg = dayAgg[ak] = {ded:0, dev:0, rmk:[], qty:0, cost:0};
+    if (!agg) agg = dayAgg[ak] = {ded:0, dev:0, rmk:[], qty:0, cost:0, trip:0};
     agg.ded += othDed;
     agg.dev += devDed;
     agg.qty += (+cell(p,iQty) || 0);
     agg.cost += (+cell(p,iCost) || 0);
+    var tp = cell(p,iTrip);
+    agg.trip += (S(tp) === "ไม่มีดีพี" ? 0 : (+tp || 0));
     for (var m3=0; m3<rmk.length; m3++) if (agg.rmk.indexOf(rmk[m3]) < 0) agg.rmk.push(rmk[m3]);
 
     if (drv){
@@ -828,11 +832,45 @@ function buildDB(sheets, report){
   for (var ak2 in dayAgg){
     var pcs = ak2.split("|"), tn2 = pcs[0], ym2 = pcs[1], dd = +pcs[2], ag = dayAgg[ak2];
     var tv = trucksMap[tn2] || (trucksMap[tn2] = {});
-    var mv = tv[ym2] || (tv[ym2] = {d:{}, r:{}, q:0, c:0});
+    var mv = tv[ym2] || (tv[ym2] = {d:{}, r:{}, qd:{}, td:{}, q:0, c:0});
     var sc = 1 + ag.ded + Math.max(DED_SDA, ag.dev);   // เพดานหักอุปกรณ์ 0.25/วัน
     mv.d[dd] = +(sc < 0 ? 0 : (sc > 1 ? 1 : sc)).toFixed(2);
     mv.q += ag.qty; mv.c += ag.cost;
+    mv.qd[dd] = +ag.qty.toFixed(2);
+    mv.td[dd] = ag.trip;
     if (ag.rmk.length) mv.r[dd] = ag.rmk.join("\n");
+  }
+
+  /* รถเสริม: ย้ายคิวและรายได้ไปเฉลี่ยให้รถจดทะเบียนในโรงงานเดียวกัน ผู้รับเหมาเดียวกัน */
+  function shareSpare(){
+    var grp = {};
+    Object.keys(trucksMap).forEach(function(tn){
+      var per = trucksMap[tn];
+      Object.keys(per).forEach(function(ym){
+        var info = regOf(tn, ym);
+        var key = ym + "|" + (info.plant_no||"") + "|" + (info.vendor_id||"");
+        var g = grp[key] || (grp[key] = {reg:[], spare:[], q:0, c:0});
+        if (acctGroup(info.acct) === "รถเสริม"){
+          g.spare.push([tn,ym]); g.q += per[ym].q; g.c += per[ym].c;
+        } else g.reg.push([tn,ym]);
+      });
+    });
+    for (var k in grp){
+      var g = grp[k];
+      if (!g.spare.length || !g.reg.length) continue;   // ไม่มีรถจดทะเบียนรับ ให้คงไว้ที่เดิม
+      var aq = g.q / g.reg.length, ac = g.c / g.reg.length;
+      g.spare.forEach(function(x){
+        var m = trucksMap[x[0]][x[1]];
+        m.q0 = +m.q.toFixed(2); m.c0 = +m.c.toFixed(2);
+        m.q = 0; m.c = 0; m.moved = 1;
+      });
+      g.reg.forEach(function(x){
+        var m = trucksMap[x[0]][x[1]];
+        m.aq = +aq.toFixed(2); m.ac = +ac.toFixed(2);
+        m.q = +(m.q + aq).toFixed(2); m.c = +(m.c + ac).toFixed(2);
+        m.nsp = g.spare.length;
+      });
+    }
   }
 
   function regOf(tn, ym){
@@ -842,6 +880,9 @@ function buildDB(sheets, report){
   function lookup(src, ym, code){
     return (src.byMonth[ym] && src.byMonth[ym][code]) || src.any[code] || null;
   }
+
+  report("เฉลี่ยคิวและรายได้ของรถเสริม", .9);
+  shareSpare();
 
   var trucks = Object.keys(trucksMap).sort().map(function(tn){
     var perMonth = trucksMap[tn];
@@ -857,8 +898,10 @@ function buildDB(sheets, report){
       var mpTot = 0, mpNote = [];
       if (mp2) for (var dd2 in mp2.d){ mpTot += mp2.d[dd2]; mpNote.push("วันที่ " + dd2 + ": " + mp2.n[dd2]); }
       m[ym3] = {
-        d: src.d, r: src.r,
+        d: src.d, r: src.r, qd: src.qd, td: src.td,
         q: +src.q.toFixed(2), c: +src.c.toFixed(2),
+        q0: src.q0, c0: src.c0, aq: src.aq, ac: src.ac,
+        nsp: src.nsp, moved: src.moved ? 1 : 0,
         gb: gm ? gm.old : 0, gt: gm ? gm.t012 : 0, gm: gm ? 0 : 1,
         z: fk2 ? 1 : 0,
         zr: fk2 ? Object.keys(fk2).join(" / ") : "",
@@ -982,7 +1025,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 34;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 36;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -990,10 +1033,10 @@ const JSON_CANDIDATES = ["data/TA100.json", "TA100.json"];
 let LAST_JSON = null;
 let XLSX_URL = XLSX_CANDIDATES[0];
 let D = null, DETAIL = null, TAB = "overview", SRC = {};
-const F = {m1:"",m2:"",division:"",dept:"",sect:"",plant:"",vendor:"",tier:"",q:""};
-const PAGE = {overview:1,score:1,reward:1,fine:1,detail:1};
-const SORT = {score:{k:"truck",d:1},reward:{k:"net",d:-1},fine:{k:"total",d:-1},detail:{k:"day",d:1}};
-const PER = {score:60,reward:80,fine:60,detail:200};
+const F = {m1:"",m2:"",gb:"vendor",division:"",dept:"",sect:"",plant:"",vendor:"",tier:"",q:""};
+const PAGE = {overview:1,summary:1,score:1,reward:1,fine:1,detail:1};
+const SORT = {summary:{k:"net",d:-1},score:{k:"truck",d:1},reward:{k:"net",d:-1},fine:{k:"total",d:-1},detail:{k:"day",d:1}};
+const PER = {summary:200,score:60,reward:80,fine:60,detail:200};
 const PER0 = Object.assign({},PER);
 const $ = s => document.querySelector(s);
 const el = (t,c,x) => {const e=document.createElement(t); if(c)e.className=c; if(x!=null)e.textContent=x; return e;};
@@ -1193,7 +1236,7 @@ async function load(opts){
 }
 
 const TABS = [
-  ["overview","ภาพรวม"],["score","คะแนนรายวัน"],["reward","คำนวณรางวัล"],
+  ["overview","ภาพรวม"],["summary","สรุปโครงการ"],["score","คะแนนรายวัน"],["reward","คำนวณรางวัล"],
   ["fine","หักเงิน จบส."],["detail","รายละเอียด Punch"],["rules","เกณฑ์คะแนน"]
 ];
 
@@ -1289,17 +1332,20 @@ function derive(){
   for (const t of D.trucks){
     if (!canSee(t)) continue;
     let score = 0, qty = 0, cost = 0, gBase = 0, movePen = 0;
+    let movedQ = 0, addedQ = 0, addedC = 0, nSpare = 0;
     let gMissing = false, hit = false, zero = false;
-    const zr = [], mpr = [], days = {}, rmk = {};
+    const zr = [], mpr = [], days = {}, rmk = {}, qd = {}, tdd = {};
     for (const k of keys){
       const mv = t.m[k]; if (!mv) continue;
       hit = true;
-      days[k] = mv.d; rmk[k] = mv.r || {};
+      days[k] = mv.d; rmk[k] = mv.r || {}; qd[k] = mv.qd || {}; tdd[k] = mv.td || {};
       for (const d in mv.d) score += mv.d[d];
       qty += mv.q; cost += mv.c;
       const isT012 = t.fleet === "T012" && t.gt_ym != null && t.gt_ym >= lastYM;
       gBase += isT012 ? mv.gt : mv.gb;
       movePen += mv.mp || 0;
+      movedQ += mv.q0 || 0; addedQ += mv.aq || 0; addedC += mv.ac || 0;
+      if (mv.nsp) nSpare = mv.nsp;
       if (mv.gm) gMissing = true;
       if (mv.z){ zero = true; if (mv.zr) zr.push(mv.zr); }
       if (mv.mpr) mpr.push(mv.mpr);
@@ -1325,8 +1371,9 @@ function derive(){
       acct:t.acct||"", acct_raw:t.acct_raw||"", spare,
       gt_ok: t.fleet === "T012" && t.gt_ym != null && t.gt_ym >= lastYM,
       g_missing: gMissing,
-      days, rmk,
+      days, rmk, qd, td: tdd,
       score, pct, tier:tier.name,
+      q_moved: movedQ, q_added: addedQ, c_added: addedC, n_spare: nSpare,
       qty:+qty.toFixed(2), revenue,
       inc_rate:incRate, base_rate:tier.inc, incentive,
       zero, zreason: zr.join(" / "),
@@ -1369,11 +1416,16 @@ function buildFilters(){
     <div class="f"><label for="f-sect">แผนก</label><select id="f-sect"></select></div>
     <div class="f"><label for="f-plant">โรงงาน</label><select id="f-plant"></select></div>
     <div class="f"><label for="f-vendor">ผู้รับเหมา</label><select id="f-vendor"></select></div>
+    <div class="f" id="f-gb-wrap" hidden><label for="f-gb">สรุปตาม</label><select id="f-gb">
+      <option value="division">กิจการ</option><option value="dept">ภาค</option>
+      <option value="sect">แผนกผลิต</option><option value="plant">โรงงาน</option>
+      <option value="vendor" selected>ผู้รับเหมา</option></select></div>
     <div class="f"><label for="f-tier">กลุ่ม TA</label><select id="f-tier"></select></div>
     <div class="f"><label for="f-q">ค้นหาเบอร์รถ / คนขับ</label><input id="f-q" type="search" placeholder="เช่น 0018 หรือ ON0447"></div>
     <div class="spacer"></div>
     <button class="btn" id="f-reset">ล้างตัวกรอง</button>
     <button class="btn primary" id="f-export">บันทึก Excel</button>`;
+  $("#f-gb").onchange = e=>{ F.gb = e.target.value; PAGE.summary = 1; render(); };
   ["m1","m2"].forEach(k=>{
     $("#f-"+k).onchange = e=>{ F[k]=e.target.value; DERIVED=null; resetPages(); syncFilters(); render(); };
   });
@@ -1512,8 +1564,9 @@ function render(){
   document.querySelectorAll("#tabs button").forEach(b=>
     b.setAttribute("aria-selected", b.dataset.tab===TAB));
   $("#filters").hidden = (TAB==="rules");
+  const gw = $("#f-gb-wrap"); if(gw) gw.hidden = (TAB!=="summary");
   const v = $("#view"); v.innerHTML="";
-  ({overview:vOverview,score:vScore,reward:vReward,fine:vFine,detail:vDetail,rules:vRules}[TAB])(v);
+  ({overview:vOverview,summary:vSummary,score:vScore,reward:vReward,fine:vFine,detail:vDetail,rules:vRules}[TAB])(v);
 }
 
 /* ── 1. ภาพรวม ────────────────────────────────────────────── */
@@ -1699,12 +1752,121 @@ function kpiStrip(t){
        `<span>${esc(l)}</span></div>`).join("");
 }
 
+/* ── สรุปเงินรางวัลของโครงการ ─────────────────────────────── */
+const TH_MONTH = {Jan:"มกราคม",Feb:"กุมภาพันธ์",Mar:"มีนาคม",Apr:"เมษายน",May:"พฤษภาคม",Jun:"มิถุนายน",
+  Jul:"กรกฎาคม",Aug:"สิงหาคม",Sep:"กันยายน",Oct:"ตุลาคม",Nov:"พฤศจิกายน",Dec:"ธันวาคม"};
+const thMonth = m=>`${TH_MONTH[m.month_en]||m.month_en} ${m.year}`;
+function rangeLabelTH(){
+  const r = rangeMonths();
+  if(!r.length) return "";
+  return r.length===1 ? thMonth(r[0]) : thMonth(r[0])+" – "+thMonth(r[r.length-1]);
+}
+function scopeLabel(){
+  return F.vendor || F.plant || F.sect || F.dept || F.division || "ทุกกิจการ";
+}
+const GB = {
+  division:{name:"กิจการ", cols:[["division","กิจการ",22]], key:x=>x.division||"(ไม่ระบุ)"},
+  dept:    {name:"ภาค", cols:[["division","กิจการ",18],["dept","ภาค",16]],
+            key:x=>(x.division||"")+"|"+(x.dept||"")},
+  sect:    {name:"แผนกผลิต", cols:[["division","กิจการ",16],["dept","ภาค",14],["sect","แผนกผลิต",20]],
+            key:x=>(x.division||"")+"|"+(x.dept||"")+"|"+(x.sect||"")},
+  plant:   {name:"โรงงาน", cols:[["division","กิจการ",15],["dept","ภาค",13],["sect","แผนกผลิต",18],
+                                  ["plant_no","รหัสโรงงาน",11],["plant","โรงงาน",20]],
+            key:x=>(x.division||"")+"|"+(x.dept||"")+"|"+(x.sect||"")+"|"+(x.plant_no||"")},
+  vendor:  {name:"ผู้รับเหมา", cols:[["division","กิจการ",16],["vendor_id","Vendor",11],
+                                      ["vendor","บริษัทคู่ธุรกิจ",30]],
+            key:x=>(x.division||"")+"|"+(x.vendor_id||"")}
+};
+const SUM_COLS = [
+  ["reg","รถจดทะเบียน (คัน)","int",13],["spare","รถเสริม (คัน)","int",11],
+  ["qty","ยอดผลิต (คิว)","num2",13],["revenue","ค่าขนส่ง (บาท)","money",15],
+  ["ta1","TA 1","int",7],["ta2","TA 2","int",7],["ta3","TA 3","int",7],
+  ["ta4","TA 4","int",7],["ta5","TA 5","int",7],["ta6","TA 6","int",7],
+  ["incentive","รางวัล Incentive (บาท)","money",17],["guarantee","การันตี (บาท)","money",14],
+  ["deduct","รายการหัก (บาท)","money",14],["net","คงเหลือรางวัลสุทธิ (บาท)","money",18]
+];
+
+/** รวมยอดตามกลุ่มที่เลือก */
+function summaryRows(){
+  const g = GB[F.gb] || GB.vendor;
+  const map = {};
+  const blank = ()=>({reg:0,spare:0,qty:0,revenue:0,ta1:0,ta2:0,ta3:0,ta4:0,ta5:0,ta6:0,
+                      incentive:0,guarantee:0,deduct:0,pen:0,fine:0,net:0});
+  trucks().forEach(x=>{
+    const k = g.key(x);
+    const o = map[k] || (map[k] = Object.assign(blank(), {_k:k}, pick(x, g.cols)));
+    if (x.spare) o.spare++; else o.reg++;
+    o.qty += x.qty; o.revenue += x.revenue;
+    o["ta"+x.tier.slice(-1)]++;
+    o.incentive += x.incentive; o.guarantee += x.g_topup;
+    o.pen += x.penalty;
+  });
+  drivers().forEach(d=>{
+    const k = g.key(d);
+    const o = map[k]; if (!o) return;
+    o.fine += d.total;
+  });
+  Object.values(map).forEach(o=>{
+    o.deduct = -(o.pen + o.fine);
+    o.net = o.incentive + o.guarantee + o.deduct;
+  });
+  return Object.values(map);
+}
+function pick(x, cols){ const o={}; cols.forEach(([k])=>o[k]=x[k]||""); return o; }
+
+function vSummary(root){
+  const list0 = summaryRows();
+  kpiStrip(trucks());
+  root.appendChild(hintBox(
+    `สรุปรางวัลโครงการ TA100 · ${scopeLabel()} · ${rangeLabelTH()} — ` +
+    `รายการหักรวมทั้งค่าปรับไม่โยก/ย้ายโรงงานของรถ และค่าปรับของ จบส.`));
+  if(!list0.length){ root.appendChild(el("div","empty",emptyMsg("ข้อมูล"))); return; }
+  const g = GB[F.gb] || GB.vendor;
+  const list = sortBy(list0, SORT.summary);
+  const page = slice(list,"summary");
+
+  const tb = el("table"); const hr = el("tr");
+  g.cols.forEach(([k,l],i)=>{ const th = headSort(el("th",null,l),"summary",k);
+    if(i===0) th.className += " sticky-l"; hr.appendChild(th); });
+  SUM_COLS.forEach(([k,l])=> hr.appendChild(headSort(el("th","n",l),"summary",k)));
+  const th = el("thead"); th.appendChild(hr); tb.appendChild(th);
+
+  const tbody = el("tbody");
+  const fmt = (v,t)=> t==="int"? n0(v) : t==="num2"? nf(v,2) : nf(v,2);
+  page.forEach(o=>{
+    const tr = el("tr");
+    g.cols.forEach(([k],i)=>{
+      const td = i===0 ? el("td","sticky-l") : el("td");
+      const sp = el("span","trunc",o[k]||""); sp.title = o[k]||"";
+      td.appendChild(sp); tr.appendChild(td);
+    });
+    SUM_COLS.forEach(([k,,t])=>{
+      const td = el("td","n"+(o[k]<0?" neg":""), fmt(o[k],t));
+      if(k==="deduct" && o[k]) td.title = `ค่าปรับไม่โยก/ย้ายโรงงาน −${n0(o.pen)} บาท\nค่าปรับ จบส. −${n0(o.fine)} บาท`;
+      if(k==="net") td.style.fontWeight = "600";
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  const tot = {}; SUM_COLS.forEach(([k])=>tot[k]=0);
+  list.forEach(o=>SUM_COLS.forEach(([k])=>tot[k]+=o[k]));
+  const tr = el("tr"); tr.style.fontWeight="600"; tr.style.background="#eef2fb";
+  const c0 = el("td","sticky-l","รวม"); tr.appendChild(c0);
+  for(let i=1;i<g.cols.length;i++) tr.appendChild(el("td"));
+  SUM_COLS.forEach(([k,,t])=>tr.appendChild(el("td","n"+(tot[k]<0?" neg":""), fmt(tot[k],t))));
+  tbody.appendChild(tr);
+  tb.appendChild(tbody);
+
+  root.appendChild(panel(`สรุปราย${g.name}`,
+    `${n0(list.length)} รายการ · ${rangeLabelTH()}`, tb, pager("summary",list.length,PER.summary)));
+}
+
 /* ── 2. คะแนนรายวัน ───────────────────────────────────────── */
 function vScore(root){
   const der = derive(), cols = der.cols, multi = der.months.length > 1;
   kpiStrip(trucks());
   root.appendChild(hintBox(
-    "แต่ละช่องคือคะแนนของรถในวันนั้น (เต็ม 1 คะแนน/วัน) ช่องว่างคือวันที่ไม่มีการ Punch · ช่องที่มีสามเหลี่ยมมุมขวาบนคือมีการหักคะแนน วางเมาส์เพื่อดูสาเหตุทั้งหมดของวันนั้น (วันเดียวอาจถูกหักได้หลายสาเหตุ)"));
+    "แต่ละช่องแสดง คิว/เที่ยว ของรถในวันนั้น · สีพื้นคือคะแนนที่ได้ (เขียว = 1 เต็ม, แดง = 0) · ช่องว่างคือวันที่ไม่มีการ Punch · ช่องที่มีสามเหลี่ยมมุมขวาบนคือมีการหักคะแนน วางเมาส์เพื่อดูคะแนนและสาเหตุทั้งหมดของวันนั้น"));
   const list = sortBy(trucks(), SORT.score);
   if(!list.length){ root.appendChild(el("div","empty",emptyMsg("รถ"))); return; }
   const page = slice(list,"score");
@@ -1737,10 +1899,11 @@ function vScore(root){
     ORG.forEach(([k])=>tr.appendChild(orgTd(x[k])));
     cols.forEach(c=>{
       const dm = x.days[c.ym], v = dm ? dm[c.day] : undefined;
-      const td = el("td","d");
+      const td = el("td","d qt");
       if(v!=null){
-        td.className = "d "+cls(v);
-        td.textContent = v%1?nf(v,2):String(v);
+        td.className = "d qt "+cls(v);
+        const qq = x.qd[c.ym] && x.qd[c.ym][c.day], tp = x.td[c.ym] && x.td[c.ym][c.day];
+        td.textContent = nf(qq||0,2) + "/" + n0(tp||0);
         const rm = x.rmk[c.ym] && x.rmk[c.ym][c.day];
         if(rm){
           td.className += " mk";
@@ -2240,18 +2403,37 @@ function sheetSpec(){
   const dayHead = cols.map(c=> multi ? `${c.label} ${c.day}` : String(c.day));
   const orgCols = ORG.map(([k,l])=>({l, t:"str", w:16, f:x=>x[k]||""}));
 
+  if (TAB === "summary"){
+    const g = GB[F.gb] || GB.vendor;
+    const fmtT = {int:"int", num2:"num2", money:"money"};
+    return {
+      name:"สรุปราย-" + g.name,
+      rows: sortBy(summaryRows(), SORT.summary),
+      freeze: g.cols.length,
+      offset: 1,
+      title: `สรุปรางวัลโครงการ TA100 ${scopeLabel()} เดือน ${rangeLabelTH()}`,
+      total: true,
+      totalLabel: g.cols.length - 1,
+      cols: g.cols.map(([k,l,w])=>({l, t:"str", w:w||16, f:x=>x[k]||"", txt:true}))
+        .concat(SUM_COLS.map(([k,l,t,w])=>({l, t:fmtT[t]||"money", w:w||14, f:x=>x[k], sum:true})))
+    };
+  }
   if (TAB === "score" || TAB === "overview"){
     return {name:"คะแนนรายวัน", rows:sortBy(trucks(), SORT.score), freeze:1, cols:[
       {l:"เบอร์รถ", t:"text", w:10, f:x=>x.truck},
       ...orgCols,
-      ...cols.map((c,i)=>({l:dayHead[i], t:"score", w:6, align:"center",
-        f:x=>{ const dm=x.days[c.ym]; return dm && dm[c.day]!=null ? dm[c.day] : ""; },
-        fill:v=>(v===""?null:XC.score[v] || XC.score[0]),
+      ...cols.map((c,i)=>({l:dayHead[i], t:"str", w:9, align:"center",
+        f:x=>{ const dm=x.days[c.ym];
+               if (!dm || dm[c.day]==null) return "";
+               return nf(x.qd[c.ym]&&x.qd[c.ym][c.day]||0,2) + "/" + n0(x.td[c.ym]&&x.td[c.ym][c.day]||0); },
+        fill:(v,x,c2)=>{ const dm=x.days[c.ym]; const sc=dm?dm[c.day]:null;
+                         return sc==null? null : (XC.score[sc] || XC.score[0]); },
         note:x=>{
           const rm = x.rmk[c.ym] && x.rmk[c.ym][c.day];
           if (!rm) return "";
           const dm = x.days[c.ym], v = dm ? dm[c.day] : null;
-          return fitLines(`รถ ${x.truck} · ${c.label} วันที่ ${c.day} = ${nf(v,2)} คะแนน`, rm);
+          return fitLines(`รถ ${x.truck} · ${c.label} วันที่ ${c.day} = ${nf(x.qd[c.ym]&&x.qd[c.ym][c.day]||0,2)} คิว / `+
+                          `${n0(x.td[c.ym]&&x.td[c.ym][c.day]||0)} เที่ยว · ${nf(v,2)} คะแนน`, rm);
         }})),
       {l:"คะแนนรวม", t:"num2", w:11, f:x=>x.score},
       {l:"%TA", t:"pct", w:9, f:x=>x.pct},
@@ -2374,16 +2556,25 @@ function exportXLSX(){
       await new Promise(r=>setTimeout(r,30));
 
       const C = spec.cols, ws = {}, WCH = C.map(c=>c.w||12);
-      const put = (r,c,cell)=>{ ws[XLSX.utils.encode_cell({r,c})] = cell; };
+      const OFF = spec.offset || 0;          // เว้นคอลัมน์ซ้ายไว้กี่ช่อง
+      const TOP = spec.title ? 1 : 0;        // แถวหัวเรื่อง
+      const put = (r,c,cell)=>{ ws[XLSX.utils.encode_cell({r,c:c+OFF})] = cell; };
 
-      C.forEach((col,ci)=> put(0, ci,
+      if (spec.title){
+        put(0, 0, xCell(spec.title, "str", {bold:true, align:"center", fill:XC.band, color:XC.white}));
+        for (let ci=1; ci<C.length; ci++)
+          put(0, ci, xCell("", "str", {fill:XC.band, color:XC.white}));
+        ws["!merges"] = [{s:{r:0,c:OFF}, e:{r:0,c:OFF+C.length-1}}];
+      }
+
+      C.forEach((col,ci)=> put(TOP, ci,
         xCell(col.l, "str", {fill:XC.band, color:XC.white, bold:true, align:"center"})));
 
       spec.rows.forEach((row,ri)=>{
         C.forEach((col,ci)=>{
           const v = col.f(row);
           const opt = {align:col.align, bold:col.bold};
-          if (col.fill) opt.fill = col.fill(v);
+          if (col.fill) opt.fill = col.fill(v, row);
           if (col.tier && XC.tier[v]){ opt.fill = XC.tier[v][0]; opt.color = XC.tier[v][1]; opt.bold = true; }
           if (typeof v === "number" && v < 0 && !opt.color) opt.color = XC.neg;
           const cell = xCell(v, col.t, opt);
@@ -2392,19 +2583,31 @@ function exportXLSX(){
             if (n){
             cell.c = [{a:"TA100", t:n}];
             cell.c.hidden = true;
-            fitBox(cell, n, WCH, ci);
+            fitBox(cell, n, WCH, ci + OFF);
           }
           }
-          put(ri+1, ci, cell);
+          put(ri+1+TOP, ci, cell);
         });
         if (heavy && ri % 8000 === 0) stage("กำลังใส่สีและเส้นตาราง", .35 + ri/spec.rows.length*.4);
       });
 
-      const last = spec.rows.length;
-      ws["!ref"] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:last, c:C.length-1}});
-      ws["!cols"] = C.map(c=>({wch:c.w||12}));
-      ws["!rows"] = [{hpt:22}];
-      ws["!autofilter"] = {ref: XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:last, c:C.length-1}})};
+      let last = spec.rows.length + TOP;
+      if (spec.total){
+        const tot = {};
+        C.forEach((col,ci)=>{ if(col.sum) tot[ci] = spec.rows.reduce((a,x)=>a+(+col.f(x)||0),0); });
+        last++;
+        C.forEach((col,ci)=>{
+          const isLbl = ci === (spec.totalLabel||0);
+          const v = col.sum ? tot[ci] : (isLbl ? "รวม" : "");
+          put(last, ci, xCell(v, col.sum ? col.t : "str",
+            {bold:true, fill:XC.total, align:col.sum?undefined:"center",
+             color:(col.sum && tot[ci] < 0) ? XC.neg : undefined}));
+        });
+      }
+      ws["!ref"] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:last, c:OFF+C.length-1}});
+      ws["!cols"] = (OFF? [{wch:2}] : []).concat(C.map(c=>({wch:c.w||12})));
+      ws["!rows"] = TOP ? [{hpt:26},{hpt:30}] : [{hpt:22}];
+      ws["!autofilter"] = {ref: XLSX.utils.encode_range({s:{r:TOP,c:OFF}, e:{r:last, c:OFF+C.length-1}})};
 
       stage("กำลังเขียนไฟล์", .8);
       await new Promise(r=>setTimeout(r,30));
