@@ -288,7 +288,7 @@ var READ_OPTS = {type:"array", cellDates:false, cellText:false, cellNF:false, de
                  sheets:["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch"]};
 var AOA_OPTS  = {header:1, raw:true, defval:null};
 
-var ENGINE_VERSION = 26;
+var ENGINE_VERSION = 27;
 
 var TA_TIERS = [
   {name:"TA 1", min:95, inc: 6, gpct:1.000},
@@ -366,6 +366,16 @@ function moveKind(inRmk, outRmk){
   var s = inRmk + " " + outRmk;
   if (s.indexOf("โยก") === -1) return "";
   return MOVE_REFUSE_RE.test(s) ? "refuse" : "help";
+}
+
+/* หมายเหตุที่ถือว่าเป็นการลางาน — หัก 0.5 คะแนน และไม่หักเรื่องอุปกรณ์ */
+var LEAVE_RE = /ลา(งาน|ป่วย|กิจ|คลอด|บวช|ครึ่งวัน|ช่วง|ระหว่าง|ไป|จริง|ญาติ)|ลาพักร้อน|ขอลา|แจ้งลา/;
+var DED_LEAVE = -0.5;
+function isLeave(v){
+  var t = S(v);
+  if (!t) return false;
+  t = t.replace(/เวลา/g, "").replace(/ไม่\s*(แจ้ง|ขอ)?ลา/g, "");
+  return LEAVE_RE.test(t);
 }
 
 /** จัดกลุ่มช่อง "รถบัญชี" ในชีตจดทะเบียนให้เหลือสองแบบ
@@ -450,8 +460,9 @@ function buildDB(sheets, report){
     var kk = ymKey(dt.y, dt.m);
     yms[i2] = kk;
     var ms = monthSet[kk];
-    if (!ms) ms = monthSet[kk] = {key:kk, year:dt.y, month:dt.m, rows:0};
+    if (!ms) ms = monthSet[kk] = {key:kk, year:dt.y, month:dt.m, rows:0, maxDay:0};
     ms.rows++;
+    if (dt.d > ms.maxDay) ms.maxDay = dt.d;
   }
   var monthKeys = Object.keys(monthSet).sort();
   if (!monthKeys.length) throw new Error("อ่านคอลัมน์ work_date ไม่ได้");
@@ -471,9 +482,12 @@ function buildDB(sheets, report){
     var m = monthSet[k];
     var dim = new Date(Date.UTC(m.year, m.month, 0)).getUTCDate();
     var wr = wdMap[k];
+    var full = (wr && wr.wd) ? wr.wd : dim;      // วันทำงานเต็มเดือนจากชีตวันทำงาน
     return {key:k, year:m.year, month:m.month, month_en:MONTH_EN[m.month-1],
             label:MONTH_EN[m.month-1]+" "+m.year, days_in_month:dim,
-            work_days:(wr && wr.wd) ? wr.wd : dim, work_note:wr?wr.note:"", rows:m.rows};
+            work_days: Math.min(m.maxDay, full),  // ใช้วันที่มีข้อมูลจริง แต่ไม่เกินวันทำงานเต็มเดือน
+            full_days: full, data_days: m.maxDay,
+            work_note:wr?wr.note:"", rows:m.rows};
   });
 
   /* ── ตารางเกณฑ์คะแนน ── */
@@ -712,14 +726,25 @@ function buildDB(sheets, report){
     var fixIn  = isPlantFix(devIn,  cell(p,iInTime),  pin,  inRmk);
     var fixOut = isPlantFix(devOut, cell(p,iOutTime), pout, outRmk);
     var plantFix = fixIn || fixOut;
-    if (plantFix){ dIn = 0; dDev = 0; dDevOut = 0; dOut = 0; dCt = 0; dRmk = 0; dRefuse = 0; ctStat = "plant_fix"; }
+    if (plantFix){ dIn = 0; dDev = 0; dDevOut = 0; dOut = 0; dCt = 0; dRmk = 0; dRefuse = 0; dLeave = 0; ctStat = "plant_fix"; }
 
     /* device_in กับ device_out รวมกันหักได้ไม่เกิน 0.25 คะแนนต่อวัน
        ถ้าเป็น W ทั้งสองฝั่ง ให้คิดฝั่ง Punch in ฝั่งเดียว */
+    /* ลางาน — หัก 0.5 แทนยอดหักของฝั่งที่ระบุการลา และไม่หักเรื่องอุปกรณ์
+       ส่วนฝั่งที่ไม่ได้ระบุการลา ยังหักตามเกณฑ์เดิม */
+    var leaveIn = isLeave(inRmk), leaveOut = isLeave(outRmk);
+    var dLeave = 0;
+    if (leaveIn || leaveOut){
+      dLeave = DED_LEAVE;
+      dDev = 0; dDevOut = 0; devOutWhy = "";
+      if (leaveIn){ dIn = 0; dCt = 0; ctStat = "leave"; note = ""; }
+      if (leaveOut){ dOut = 0; outWhy = ""; }
+    }
+
     var devCapped = false;
     if (dDev < 0 && dDevOut < 0){ dDevOut = 0; devOutWhy = ""; devCapped = true; }
     var devDed = Math.max(DED_SDA, dDev + dDevOut);
-    var othDed = dIn + dOut + dCt + dRmk + dRefuse;
+    var othDed = dIn + dOut + dCt + dRmk + dRefuse + dLeave;
 
     var ded = othDed + devDed;
     var pre = 1 + ded;
@@ -737,6 +762,8 @@ function buildDB(sheets, report){
       why2.push("• ตรวจรถหลังเวลาเข้างาน+" + LATE_GRACE_MIN + " น. แต่โรงงานแก้ไขเป็นปกติ — ไม่หักคะแนน" +
                 (inRmk ? " (หมายเหตุ: " + inRmk + ")" : " (ไม่ได้ระบุเหตุผล)"));
     if (dOut < 0) why2.push(fmtDed(dOut) + " " + outWhy);
+    if (dLeave < 0)
+      why2.push(fmtDed(dLeave) + " ลางาน (หมายเหตุ: " + (leaveIn ? inRmk : outRmk) + ")");
     if (dCt < 0) why2.push(fmtDed(dCt) + " " + (note || "ตรวจรถสาย"));
     var mvRmk = inRmk.indexOf("โยก") !== -1 ? inRmk : outRmk;
     if (dRefuse < 0)
@@ -1025,7 +1052,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 36;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 37;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -1783,7 +1810,8 @@ const SUM_COLS = [
   ["ta1","TA 1","int",7],["ta2","TA 2","int",7],["ta3","TA 3","int",7],
   ["ta4","TA 4","int",7],["ta5","TA 5","int",7],["ta6","TA 6","int",7],
   ["incentive","รางวัล Incentive (บาท)","money",17],["guarantee","การันตี (บาท)","money",14],
-  ["deduct","รายการหัก (บาท)","money",14],["net","คงเหลือรางวัลสุทธิ (บาท)","money",18]
+  ["deduct","รายการหัก (บาท)","money",14],["fine","หักเงิน จบส. (บาท)","money",15],
+  ["net","คงเหลือรางวัลสุทธิ (บาท)","money",18],["note","หมายเหตุ","str",30]
 ];
 
 /** รวมยอดตามกลุ่มที่เลือก */
@@ -1791,7 +1819,7 @@ function summaryRows(){
   const g = GB[F.gb] || GB.vendor;
   const map = {};
   const blank = ()=>({reg:0,spare:0,qty:0,revenue:0,ta1:0,ta2:0,ta3:0,ta4:0,ta5:0,ta6:0,
-                      incentive:0,guarantee:0,deduct:0,pen:0,fine:0,net:0});
+                      incentive:0,guarantee:0,deduct:0,pen:0,fineAmt:0,fine:0,net:0,note:""});
   trucks().forEach(x=>{
     const k = g.key(x);
     const o = map[k] || (map[k] = Object.assign(blank(), {_k:k}, pick(x, g.cols)));
@@ -1804,11 +1832,15 @@ function summaryRows(){
   drivers().forEach(d=>{
     const k = g.key(d);
     const o = map[k]; if (!o) return;
-    o.fine += d.total;
+    o.fineAmt += d.total;
   });
   Object.values(map).forEach(o=>{
-    o.deduct = -(o.pen + o.fine);
-    o.net = o.incentive + o.guarantee + o.deduct;
+    o.deduct = -o.pen;
+    o.fine = -o.fineAmt;
+    /* ถ้าไม่มีทั้งเงินรางวัลและการันตี ก็ไม่มีอะไรให้หักค่าปรับ จบส. ออก */
+    const hasReward = o.incentive !== 0 || o.guarantee !== 0;
+    o.net = o.incentive + o.guarantee + o.deduct + (hasReward ? o.fine : 0);
+    o.note = (!hasReward && o.fineAmt) ? "ไม่มีเงินรางวัลและการันตีให้หัก" : "";
   });
   return Object.values(map);
 }
@@ -1819,7 +1851,8 @@ function vSummary(root){
   kpiStrip(trucks());
   root.appendChild(hintBox(
     `สรุปรางวัลโครงการ TA100 · ${scopeLabel()} · ${rangeLabelTH()} — ` +
-    `รายการหักรวมทั้งค่าปรับไม่โยก/ย้ายโรงงานของรถ และค่าปรับของ จบส.`));
+    `รายการหัก = ค่าปรับไม่โยก/ย้ายโรงงานของรถ · หักเงิน จบส. แสดงแยกต่างหาก ` +
+    `และจะไม่ถูกลบออกจากรางวัลสุทธิถ้ากลุ่มนั้นไม่มีทั้งเงินรางวัลและการันตี`));
   if(!list0.length){ root.appendChild(el("div","empty",emptyMsg("ข้อมูล"))); return; }
   const g = GB[F.gb] || GB.vendor;
   const list = sortBy(list0, SORT.summary);
@@ -1841,19 +1874,28 @@ function vSummary(root){
       td.appendChild(sp); tr.appendChild(td);
     });
     SUM_COLS.forEach(([k,,t])=>{
+      if(t==="str"){
+        const td = el("td"); const sp = el("span","trunc",o[k]||""); sp.title = o[k]||"";
+        if(o[k]) td.className = "neg";
+        td.appendChild(sp); tr.appendChild(td); return;
+      }
       const td = el("td","n"+(o[k]<0?" neg":""), fmt(o[k],t));
-      if(k==="deduct" && o[k]) td.title = `ค่าปรับไม่โยก/ย้ายโรงงาน −${n0(o.pen)} บาท\nค่าปรับ จบส. −${n0(o.fine)} บาท`;
+      if(k==="deduct" && o[k]) td.title = "ค่าปรับไม่โยกรถ / ย้ายโรงงานของรถในกลุ่มนี้";
+      if(k==="fine" && o[k]) td.title = "ยอดรวมจากแท็บหักเงิน จบส." +
+        (o.note ? "\n" + o.note + " จึงไม่นำไปลบออกจากรางวัลสุทธิ" : "");
       if(k==="net") td.style.fontWeight = "600";
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
   });
   const tot = {}; SUM_COLS.forEach(([k])=>tot[k]=0);
-  list.forEach(o=>SUM_COLS.forEach(([k])=>tot[k]+=o[k]));
+  list.forEach(o=>SUM_COLS.forEach(([k,,t])=>{ if(t!=="str") tot[k]+=o[k]; }));
+  tot.note = "";
   const tr = el("tr"); tr.style.fontWeight="600"; tr.style.background="#eef2fb";
   const c0 = el("td","sticky-l","รวม"); tr.appendChild(c0);
   for(let i=1;i<g.cols.length;i++) tr.appendChild(el("td"));
-  SUM_COLS.forEach(([k,,t])=>tr.appendChild(el("td","n"+(tot[k]<0?" neg":""), fmt(tot[k],t))));
+  SUM_COLS.forEach(([k,,t])=>tr.appendChild(
+    t==="str" ? el("td") : el("td","n"+(tot[k]<0?" neg":""), fmt(tot[k],t))));
   tbody.appendChild(tr);
   tb.appendChild(tbody);
 
@@ -2415,7 +2457,9 @@ function sheetSpec(){
       total: true,
       totalLabel: g.cols.length - 1,
       cols: g.cols.map(([k,l,w])=>({l, t:"str", w:w||16, f:x=>x[k]||"", txt:true}))
-        .concat(SUM_COLS.map(([k,l,t,w])=>({l, t:fmtT[t]||"money", w:w||14, f:x=>x[k], sum:true})))
+        .concat(SUM_COLS.map(([k,l,t,w])=>
+          t==="str" ? {l, t:"str", w:w||20, f:x=>x[k]||""}
+                    : {l, t:fmtT[t]||"money", w:w||14, f:x=>x[k], sum:true}))
     };
   }
   if (TAB === "score" || TAB === "overview"){
