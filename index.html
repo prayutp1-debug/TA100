@@ -1052,7 +1052,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 37;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 38;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -1837,8 +1837,9 @@ function summaryRows(){
   Object.values(map).forEach(o=>{
     o.deduct = -o.pen;
     o.fine = -o.fineAmt;
-    /* ถ้าไม่มีทั้งเงินรางวัลและการันตี ก็ไม่มีอะไรให้หักค่าปรับ จบส. ออก */
-    const hasReward = o.incentive !== 0 || o.guarantee !== 0;
+    /* ต้องมีเงินรางวัล + การันตีเป็นบวกจริง จึงจะมีอะไรให้หักค่าปรับ จบส. ออก
+       ดูแยกตามกลุ่มที่เลือก (กรณีผู้รับเหมาจะแยกตามกิจการอยู่แล้ว) */
+    const hasReward = (o.incentive + o.guarantee) > 0;
     o.net = o.incentive + o.guarantee + o.deduct + (hasReward ? o.fine : 0);
     o.note = (!hasReward && o.fineAmt) ? "ไม่มีเงินรางวัลและการันตีให้หัก" : "";
   });
