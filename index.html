@@ -288,7 +288,7 @@ var READ_OPTS = {type:"array", cellDates:false, cellText:false, cellNF:false, de
                  sheets:["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch"]};
 var AOA_OPTS  = {header:1, raw:true, defval:null};
 
-var ENGINE_VERSION = 27;
+var ENGINE_VERSION = 30;
 
 var TA_TIERS = [
   {name:"TA 1", min:95, inc: 6, gpct:1.000},
@@ -388,7 +388,7 @@ function acctGroup(v){
 }
 
 /* หมายเหตุที่ยืนยันว่า "ไม่ตรวจสภาพรถเกินเวลาเข้างาน" จริง — จึงหักมาสาย 0.25 */
-var LATE_RMK_RE = /ไม่ตรวจสภาพ|เกินเวลาเข้างาน/;
+var LATE_RMK_RE = /ไม่ตรวจสภาพ|เกินเวลาเข้างาน|^ปกติ$/;
 
 /** หมายเหตุ "ระบบคำนวณ" (สะกดผิดเป็น ระบบคำนวน ก็นับ) */
 function isAutoRemark(s){ return /^ระบบคำนว/.test(s); }
@@ -492,7 +492,7 @@ function buildDB(sheets, report){
 
   /* ── ตารางเกณฑ์คะแนน ── */
   var SC = {punch_in_status:{}, punch_out_status:{}, device_no:{}, check_time:{}};
-  var FINE = {}, FINE_ALL = {}, MEANING = {}, rules = [], RMK_RULES = [];
+  var FINE = {}, FINE_ALL = {}, MEANING = {}, rules = [], RMK_RULES = [], LEAVE_PTS = DED_LEAVE;
   if (rulesRaw && rulesRaw.length > 1){
     var R = headIdx(rulesRaw);
     var rGrp = col(R,"In/Out"), rCode = col(R,"รหัส"), rPts = col(R,"คะแนนรถ"),
@@ -501,12 +501,19 @@ function buildDB(sheets, report){
       var rr = rulesRaw[q]; if (!rr) continue;
       var grp = S(cell(rr,rGrp)), code = S(cell(rr,rCode));
       if (!grp || !code) continue;
+      /* ชื่อกลุ่มในชีตเขียนได้หลายแบบ เช่น "device_in / Out", "punch_Out_adj_remark" */
+      var gl = grp.replace(/\s/g,"").toLowerCase();
+      if (gl.indexOf("device") === 0) grp = "device_no";
+      else if (gl === "punch_out_adj_remark") grp = "punch_out_adj_remark";
+      else if (gl === "punch_in_adj_remark") grp = "punch_in_adj_remark";
       var pts = parseFloat(cell(rr,rPts)); if (isNaN(pts)) pts = 0;
       var fine = S(cell(rr,rFine)), meaning = S(cell(rr,rMean));
       rules.push({grp:grp, code:code, meaning:meaning, pts:pts, fine:fine});
-      if (grp === "punch_out_adj_remark"){
-        // กฎที่ดูจากข้อความในช่อง punch_out_adj_remark — ใช้คำแรกของความหมายเป็นคำค้น
+      if (grp === "punch_out_adj_remark" || grp === "punch_in_adj_remark"){
+        // กฎที่ดูจากข้อความในช่องหมายเหตุ — ใช้คำแรกของความหมายเป็นคำค้น
         var kw = meaning.replace(/\(.*?\)/g, " ").trim().split(/\s+/)[0];
+        if (/^ลา/.test(kw)){ if (pts < 0) LEAVE_PTS = pts; continue; }   // การลา คิดแยกต่างหาก
+        if (grp === "punch_in_adj_remark") continue;
         if (kw) RMK_RULES.push({kw:kw, text:meaning, pts:(pts<0?pts:0),
                                 fine:(fine === "ตัดทั้งโครงการ" ? 0 : (parseFloat(fine.replace(/,/g,"")) || 0)),
                                 allcut:(fine === "ตัดทั้งโครงการ")});
@@ -594,7 +601,7 @@ function buildDB(sheets, report){
     var eY = col(E,"ปี"), eM = col(E,"เดือน"), eT = col(E,"เบอร์รถ"),
         eDiv = col(E,"กิจการ"), eDept = col(E,"ภาค"), eSect = col(E,"แผนก"),
         ePno = col(E,"รหัสโรงงาน"), ePl = col(E,"โรงงาน"), eVen = col(E,"ผู้รับเหมา"),
-        eVid = col(E,"Vendor"), eAcc = col(E,"รถบัญชี"),
+        eVid = col(E,"Vendor"), eAcc = col(E,"รถบัญชี"), eCC = col(E, null, "Cost Center"),
         eFl = col(E,"FLEET_TYPE_NO"), eSz = col(E,"ขนาดรถ"),
         eGt = col(E, null, "วันหมดอายุ GT");
     for (var e1=1; e1<reg.length; e1++){
@@ -605,7 +612,7 @@ function buildDB(sheets, report){
         division:S(cell(er,eDiv)), dept:S(cell(er,eDept)), sect:S(cell(er,eSect)),
         plant_no:S(cell(er,ePno)), plant:S(cell(er,ePl)),
         vendor:S(cell(er,eVen)), vendor_id:S(cell(er,eVid)),
-        acct:S(cell(er,eAcc)), fleet:S(cell(er,eFl)), size:S(cell(er,eSz)),
+        acct:S(cell(er,eAcc)), cc:S(cell(er,eCC)), fleet:S(cell(er,eFl)), size:S(cell(er,eSz)),
         gt: gt ? ymKey(gt.y,gt.m)+"-"+(gt.d<10?"0":"")+gt.d : null,
         gt_ym: gt ? gt.y*12 + gt.m : null
       };
@@ -675,11 +682,11 @@ function buildDB(sheets, report){
           outWhy = "กลับก่อนเลิกงาน (Punch out " + otTxt + " / เลิกงาน " + hhmm(po) + ")";
         }
       } else if (blankRemark(outRmk)){
-        // ไม่ใช้ SDA + กลับก่อนเลิกงาน + ไม่ได้ระบุเหตุผล
-        if (early && !moved){
-          dDevOut = DED_SDA;
-          devOutWhy = "ไม่ใช้ SDA ตอน Punch out และกลับก่อนเลิกงานโดยไม่ระบุเหตุผล" +
-                      " (Punch out " + otTxt + " / เลิกงาน " + hhmm(po) + ")";
+        // กลับก่อนเลิกงานโดยไม่ระบุเหตุผล (ว่าง เคาะ จุด ขีด หรือ "ปกติ") = หัก 1
+        if (early){
+          dOut = -1;
+          outWhy = "กลับก่อนเลิกงานโดยไม่ระบุเหตุผล (Punch out " + otTxt +
+                   " / เลิกงาน " + hhmm(po) + ")";
         }
       }
       // ระบุเหตุผลอื่น หรือ Punch out หลังเวลาเลิกงาน = ไม่หักคะแนน
@@ -735,7 +742,7 @@ function buildDB(sheets, report){
     var leaveIn = isLeave(inRmk), leaveOut = isLeave(outRmk);
     var dLeave = 0;
     if (leaveIn || leaveOut){
-      dLeave = DED_LEAVE;
+      dLeave = LEAVE_PTS;
       dDev = 0; dDevOut = 0; devOutWhy = "";
       if (leaveIn){ dIn = 0; dCt = 0; ctStat = "leave"; note = ""; }
       if (leaveOut){ dOut = 0; outWhy = ""; }
@@ -939,7 +946,7 @@ function buildDB(sheets, report){
     return {
       truck: tn,
       division: info.division||"", dept: info.dept||"", sect: info.sect||"",
-      plant_no: info.plant_no||"", plant: info.plant||"",
+      plant_no: info.plant_no||"", plant: info.plant||"", cc: info.cc||"",
       vendor: info.vendor||"", vendor_id: info.vendor_id||"",
       fleet: info.fleet||"", size: info.size||"",
       acct: acctGroup(info.acct), acct_raw: info.acct||"",
@@ -1052,7 +1059,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 38;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 40;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -1061,9 +1068,9 @@ let LAST_JSON = null;
 let XLSX_URL = XLSX_CANDIDATES[0];
 let D = null, DETAIL = null, TAB = "overview", SRC = {};
 const F = {m1:"",m2:"",gb:"vendor",division:"",dept:"",sect:"",plant:"",vendor:"",tier:"",q:""};
-const PAGE = {overview:1,summary:1,score:1,reward:1,fine:1,detail:1};
-const SORT = {summary:{k:"net",d:-1},score:{k:"truck",d:1},reward:{k:"net",d:-1},fine:{k:"total",d:-1},detail:{k:"day",d:1}};
-const PER = {summary:200,score:60,reward:80,fine:60,detail:200};
+const PAGE = {overview:1,summary:1,summaryPlant:1,score:1,reward:1,fine:1,detail:1};
+const SORT = {summary:{k:"net",d:-1},summaryPlant:{k:"net",d:-1},score:{k:"truck",d:1},reward:{k:"net",d:-1},fine:{k:"total",d:-1},detail:{k:"day",d:1}};
+const PER = {summary:200,summaryPlant:200,score:60,reward:80,fine:60,detail:200};
 const PER0 = Object.assign({},PER);
 const $ = s => document.querySelector(s);
 const el = (t,c,x) => {const e=document.createElement(t); if(c)e.className=c; if(x!=null)e.textContent=x; return e;};
@@ -1263,7 +1270,7 @@ async function load(opts){
 }
 
 const TABS = [
-  ["overview","ภาพรวม"],["summary","สรุปโครงการ"],["score","คะแนนรายวัน"],["reward","คำนวณรางวัล"],
+  ["overview","ภาพรวม"],["summary","สรุปโครงการ"],["summaryPlant","สรุปโครงการ-รายโรงงาน"],["score","คะแนนรายวัน"],["reward","คำนวณรางวัล"],
   ["fine","หักเงิน จบส."],["detail","รายละเอียด Punch"],["rules","เกณฑ์คะแนน"]
 ];
 
@@ -1393,7 +1400,7 @@ function derive(){
     const penalty = +movePen.toFixed(2);
     trucks.push({
       truck:t.truck, division:t.division, dept:t.dept, sect:t.sect,
-      plant_no:t.plant_no, plant:t.plant, vendor:t.vendor, vendor_id:t.vendor_id,
+      plant_no:t.plant_no, plant:t.plant, cc:t.cc||"", vendor:t.vendor, vendor_id:t.vendor_id,
       fleet:t.fleet, size:t.size, gt:t.gt,
       acct:t.acct||"", acct_raw:t.acct_raw||"", spare,
       gt_ok: t.fleet === "T012" && t.gt_ym != null && t.gt_ym >= lastYM,
@@ -1593,7 +1600,7 @@ function render(){
   $("#filters").hidden = (TAB==="rules");
   const gw = $("#f-gb-wrap"); if(gw) gw.hidden = (TAB!=="summary");
   const v = $("#view"); v.innerHTML="";
-  ({overview:vOverview,summary:vSummary,score:vScore,reward:vReward,fine:vFine,detail:vDetail,rules:vRules}[TAB])(v);
+  ({overview:vOverview,summary:vSummary,summaryPlant:vSummary,score:vScore,reward:vReward,fine:vFine,detail:vDetail,rules:vRules}[TAB])(v);
 }
 
 /* ── 1. ภาพรวม ────────────────────────────────────────────── */
@@ -1704,39 +1711,49 @@ function vOverview(root){
   p1c.style.gridColumn = "1 / -1";
   g.appendChild(p1c);
 
-  /* 1d. สรุปตามกิจการ */
+  /* 1d. สรุปตามกิจการ — คิดเหมือนแท็บสรุปโครงการ */
   const by = {};
   t.forEach(x=>{
     const k = x.division||"(ไม่ระบุ)";
-    const o = by[k] || (by[k]={n:0,pct:0,qty:0,rev:0,inc:0,gar:0,pen:0,net:0,ta1:0});
+    const o = by[k] || (by[k]={n:0,pct:0,qty:0,rev:0,inc:0,gar:0,pen:0,fine:0,net:0,note:"",ta1:0});
     o.n++; o.pct+=x.pct; o.qty+=x.qty; o.rev+=x.revenue;
-    o.inc+=x.incentive; o.gar+=x.g_topup; o.pen+=x.penalty; o.net+=x.net;
+    o.inc+=x.incentive; o.gar+=x.g_topup; o.pen+=x.penalty;
     if(x.tier==="TA 1") o.ta1++;
   });
+  drivers().forEach(d=>{ const o = by[d.division||"(ไม่ระบุ)"]; if(o) o.fine += d.total; });
+  Object.values(by).forEach(o=>{
+    const has = (o.inc + o.gar) > 0;
+    o.net = o.inc + o.gar - o.pen - (has ? o.fine : 0);
+    o.note = (!has && o.fine) ? "ไม่มีเงินรางวัลและการันตีให้หัก" : "";
+  });
+
   const tb = el("table");
   tb.innerHTML = `<thead><tr><th>กิจการ</th><th class="n">รถ</th><th class="n">%TA เฉลี่ย</th>
     <th class="n">TA 1</th><th class="n">คิวรวม</th><th class="n">รายได้ (บาท)</th>
     <th class="n">เงินรางวัล</th><th class="n">ส่วนต่างการันตี</th>
-    <th class="n">หักไม่โยก/ย้ายโรงงาน</th><th class="n">รางวัลสุทธิ</th></tr></thead>`;
+    <th class="n">หักไม่โยก/ย้ายโรงงาน</th><th class="n">หักเงิน จบส. (บาท)</th>
+    <th class="n">รางวัลสุทธิ</th><th>หมายเหตุ</th></tr></thead>`;
   const tbody = el("tbody");
-  Object.entries(by).sort((a,b)=>b[1].net-a[1].net).forEach(([k,o])=>{
-    const tr = el("tr");
-    tr.innerHTML = `<td>${esc(k)}</td><td class="n">${n0(o.n)}</td>
+  const rowHTML = (name,o)=>`<td>${esc(name)}</td><td class="n">${n0(o.n)}</td>
       <td class="n">${nf(o.pct/o.n,1)}%</td><td class="n">${n0(o.ta1)}</td>
       <td class="n">${n0(o.qty)}</td><td class="n">${n0(o.rev)}</td>
       <td class="n ${o.inc<0?"neg":""}">${n0(o.inc)}</td><td class="n">${n0(o.gar)}</td>
-      <td class="n ${o.pen?"neg":""}">${o.pen?"−"+n0(o.pen):"0"}</td><td class="n ${o.net<0?"neg":""}"><b>${n0(o.net)}</b></td>`;
-    tbody.appendChild(tr);
+      <td class="n ${o.pen?"neg":""}">${o.pen?"−"+n0(o.pen):"0"}</td>
+      <td class="n ${o.fine?"neg":""}">${o.fine?"−"+n0(o.fine):"0"}</td>
+      <td class="n ${o.net<0?"neg":""}"><b>${n0(o.net)}</b></td>
+      <td class="${o.note?"neg":""}">${esc(o.note)}</td>`;
+  Object.entries(by).sort((a,b)=>b[1].net-a[1].net).forEach(([k,o])=>{
+    const tr2 = el("tr"); tr2.innerHTML = rowHTML(k,o); tbody.appendChild(tr2);
   });
-  const sum = {n:t.length,pct:t.reduce((s,x)=>s+x.pct,0),qty:0,rev:0,inc:0,gar:0,pen:0,net:0,ta1:0};
-  t.forEach(x=>{sum.qty+=x.qty;sum.rev+=x.revenue;sum.inc+=x.incentive;sum.gar+=x.g_topup;sum.pen+=x.penalty;sum.net+=x.net;if(x.tier==="TA 1")sum.ta1++;});
+  const sum = {n:t.length,pct:t.reduce((s,x)=>s+x.pct,0),qty:0,rev:0,inc:0,gar:0,pen:0,fine:0,net:0,note:"",ta1:0};
+  Object.values(by).forEach(o=>{
+    sum.qty+=o.qty; sum.rev+=o.rev; sum.inc+=o.inc; sum.gar+=o.gar;
+    sum.pen+=o.pen; sum.fine+=o.fine; sum.net+=o.net; sum.ta1+=o.ta1;
+  });
   const tr = el("tr"); tr.style.fontWeight="600"; tr.style.background="#eef2fb";
-  tr.innerHTML = `<td>รวม</td><td class="n">${n0(sum.n)}</td><td class="n">${nf(sum.pct/sum.n,1)}%</td>
-    <td class="n">${n0(sum.ta1)}</td><td class="n">${n0(sum.qty)}</td><td class="n">${n0(sum.rev)}</td>
-    <td class="n ${sum.inc<0?"neg":""}">${n0(sum.inc)}</td><td class="n">${n0(sum.gar)}</td>
-    <td class="n ${sum.pen?"neg":""}">${sum.pen?"−"+n0(sum.pen):"0"}</td><td class="n"><b>${n0(sum.net)}</b></td>`;
+  tr.innerHTML = rowHTML("รวม", sum);
   tbody.appendChild(tr); tb.appendChild(tbody);
-  const p2 = panel("สรุปตามกิจการ", rangeLabel(), tb);
+  const p2 = panel("สรุปตามกิจการ", rangeLabelTH(), tb);
   p2.style.gridColumn="1 / -1";
   g.appendChild(p2);
 
@@ -1800,6 +1817,11 @@ const GB = {
   plant:   {name:"โรงงาน", cols:[["division","กิจการ",15],["dept","ภาค",13],["sect","แผนกผลิต",18],
                                   ["plant_no","รหัสโรงงาน",11],["plant","โรงงาน",20]],
             key:x=>(x.division||"")+"|"+(x.dept||"")+"|"+(x.sect||"")+"|"+(x.plant_no||"")},
+  plantv:  {name:"โรงงาน", cols:[["division","กิจการ",15],["dept","ภาค",12],["sect","แผนกผลิต",17],
+                                  ["plant_no","รหัสโรงงาน",11],["plant","โรงงาน",18],
+                                  ["cc","Cost Center-VC",14],
+                                  ["vendor_id","Vendor",11],["vendor","บริษัทคู่ธุรกิจ",28]],
+            key:x=>(x.division||"")+"|"+(x.plant_no||"")+"|"+(x.vendor_id||"")},
   vendor:  {name:"ผู้รับเหมา", cols:[["division","กิจการ",16],["vendor_id","Vendor",11],
                                       ["vendor","บริษัทคู่ธุรกิจ",30]],
             key:x=>(x.division||"")+"|"+(x.vendor_id||"")}
@@ -1815,8 +1837,9 @@ const SUM_COLS = [
 ];
 
 /** รวมยอดตามกลุ่มที่เลือก */
+const curGB = ()=> TAB === "summaryPlant" ? GB.plantv : (GB[F.gb] || GB.vendor);
 function summaryRows(){
-  const g = GB[F.gb] || GB.vendor;
+  const g = curGB();
   const map = {};
   const blank = ()=>({reg:0,spare:0,qty:0,revenue:0,ta1:0,ta2:0,ta3:0,ta4:0,ta5:0,ta6:0,
                       incentive:0,guarantee:0,deduct:0,pen:0,fineAmt:0,fine:0,net:0,note:""});
@@ -1855,14 +1878,14 @@ function vSummary(root){
     `รายการหัก = ค่าปรับไม่โยก/ย้ายโรงงานของรถ · หักเงิน จบส. แสดงแยกต่างหาก ` +
     `และจะไม่ถูกลบออกจากรางวัลสุทธิถ้ากลุ่มนั้นไม่มีทั้งเงินรางวัลและการันตี`));
   if(!list0.length){ root.appendChild(el("div","empty",emptyMsg("ข้อมูล"))); return; }
-  const g = GB[F.gb] || GB.vendor;
-  const list = sortBy(list0, SORT.summary);
-  const page = slice(list,"summary");
+  const g = curGB(), TB = TAB;
+  const list = sortBy(list0, SORT[TB]);
+  const page = slice(list,TB);
 
   const tb = el("table"); const hr = el("tr");
-  g.cols.forEach(([k,l],i)=>{ const th = headSort(el("th",null,l),"summary",k);
+  g.cols.forEach(([k,l],i)=>{ const th = headSort(el("th",null,l),TB,k);
     if(i===0) th.className += " sticky-l"; hr.appendChild(th); });
-  SUM_COLS.forEach(([k,l])=> hr.appendChild(headSort(el("th","n",l),"summary",k)));
+  SUM_COLS.forEach(([k,l])=> hr.appendChild(headSort(el("th","n",l),TB,k)));
   const th = el("thead"); th.appendChild(hr); tb.appendChild(th);
 
   const tbody = el("tbody");
@@ -1901,7 +1924,7 @@ function vSummary(root){
   tb.appendChild(tbody);
 
   root.appendChild(panel(`สรุปราย${g.name}`,
-    `${n0(list.length)} รายการ · ${rangeLabelTH()}`, tb, pager("summary",list.length,PER.summary)));
+    `${n0(list.length)} รายการ · ${rangeLabelTH()}`, tb, pager(TB,list.length,PER[TB])));
 }
 
 /* ── 2. คะแนนรายวัน ───────────────────────────────────────── */
@@ -2052,7 +2075,7 @@ function vReward(root){
   const s = {qty:0,revenue:0,incentive:0,g_amount:0,g_topup:0,penalty:0,net:0,score:0};
   list.forEach(x=>Object.keys(s).forEach(k=>s[k]+=x[k]));
   const tr = el("tr"); tr.style.fontWeight="600"; tr.style.background="#eef2fb";
-  tr.innerHTML = `<td class="sticky-l">รวม ${n0(list.length)} คัน</td><td colspan="6"></td>
+  tr.innerHTML = `<td class="sticky-l">รวม ${n0(list.length)} คัน</td><td colspan="7"></td>
     <td class="n">${nf(s.score)}</td><td class="n">${nf(s.qty)}</td><td class="n">${nf(s.revenue)}</td>
     <td colspan="3"></td><td class="n ${s.incentive<0?"neg":""}">${nf(s.incentive)}</td>
     <td colspan="2"></td><td class="n">${nf(s.g_amount)}</td><td class="n">${nf(s.g_topup)}</td>
@@ -2446,12 +2469,12 @@ function sheetSpec(){
   const dayHead = cols.map(c=> multi ? `${c.label} ${c.day}` : String(c.day));
   const orgCols = ORG.map(([k,l])=>({l, t:"str", w:16, f:x=>x[k]||""}));
 
-  if (TAB === "summary"){
-    const g = GB[F.gb] || GB.vendor;
+  if (TAB === "summary" || TAB === "summaryPlant"){
+    const g = curGB();
     const fmtT = {int:"int", num2:"num2", money:"money"};
     return {
       name:"สรุปราย-" + g.name,
-      rows: sortBy(summaryRows(), SORT.summary),
+      rows: sortBy(summaryRows(), SORT[TAB]),
       freeze: g.cols.length,
       offset: 1,
       title: `สรุปรางวัลโครงการ TA100 ${scopeLabel()} เดือน ${rangeLabelTH()}`,
