@@ -1091,7 +1091,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 43;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 44;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -1411,8 +1411,10 @@ function derive(){
       for (const d in mv.d) score += mv.d[d];
       qty += mv.q; cost += mv.c;
       const isT012 = t.fleet === "T012" && t.gt_ym != null && t.gt_ym >= lastYM;
-      gBase += (isT012 ? mv.gt : mv.gb) * (gRatio[k] || 1);
-      gFull += (isT012 ? mv.gt : mv.gb);
+      // รถ T012 ใช้ฐานการันตีที่มากกว่า ระหว่างการันตีรถเก่ากับการันตี T012
+      const gPick = isT012 ? Math.max(mv.gt || 0, mv.gb || 0) : (mv.gb || 0);
+      gBase += gPick * (gRatio[k] || 1);
+      gFull += gPick;
       movePen += mv.mp || 0;
       movedQ += mv.q0 || 0; addedQ += mv.aq || 0; addedC += mv.ac || 0;
       if (mv.nsp) nSpare = mv.nsp;
@@ -2061,7 +2063,7 @@ function vReward(root){
     if(x.spare) ac.className += " neg";
     tr.appendChild(ac);
     const f = el("td","c",x.fleet);
-    if(x.fleet==="T012") f.title = x.gt_ok? `รถใหม่ GT ถึง ${x.gt} — ใช้เกณฑ์การันตี T012`
+    if(x.fleet==="T012") f.title = x.gt_ok? `รถใหม่ GT ถึง ${x.gt} — ใช้ฐานการันตีที่มากกว่าระหว่างรถเก่ากับ T012`
                                           : `GT หมดอายุ ${x.gt} — ใช้เกณฑ์การันตีรถเก่า`;
     tr.appendChild(f);
     tr.appendChild(el("td","n",nf(x.score)));
