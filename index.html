@@ -288,7 +288,7 @@ var READ_OPTS = {type:"array", cellDates:false, cellText:false, cellNF:false, de
                  sheets:["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch"]};
 var AOA_OPTS  = {header:1, raw:true, defval:null};
 
-var ENGINE_VERSION = 32;
+var ENGINE_VERSION = 33;
 
 var TA_TIERS = [
   {name:"TA 1", min:95, inc: 6, gpct:1.000},
@@ -853,12 +853,16 @@ function buildDB(sheets, report){
     }
 
     var ak = truck + "|" + ym + "|" + day, agg = dayAgg[ak];
-    if (!agg) agg = dayAgg[ak] = {ded:0, dev:0, rmk:[], qty:0, cost:0, trip:0};
+    if (!agg) agg = dayAgg[ak] = {ded:0, dev:0, rmk:[], qty:0, cost:0, trip:0, rows:0};
     agg.ded += othDed;
     agg.dev += devDed;
-    agg.qty += (+cell(p,iQty) || 0);
-    agg.cost += (+cell(p,iCost) || 0);
-    agg.trip += trips;
+    /* คิว รายได้ และเที่ยว เป็นยอด "ของทั้งวัน" ถ้าวันนั้นมีหลายแถว (คนขับหลายคน
+       หรือวิ่งหลายโรงงาน) ค่าจะซ้ำกัน จึงนับครั้งเดียว ไม่บวกทบ */
+    var qv = +cell(p,iQty) || 0, cv = +cell(p,iCost) || 0;
+    if (agg.rows === 0 || qv > agg.qty) agg.qty = qv;
+    if (agg.rows === 0 || cv > agg.cost) agg.cost = cv;
+    if (trips > agg.trip) agg.trip = trips;
+    agg.rows++;
     for (var m3=0; m3<rmk.length; m3++) if (agg.rmk.indexOf(rmk[m3]) < 0) agg.rmk.push(rmk[m3]);
 
     if (drv){
@@ -1087,7 +1091,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 42;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 43;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
