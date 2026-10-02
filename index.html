@@ -1087,7 +1087,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 41;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 42;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -1388,13 +1388,16 @@ function derive(){
   if (DERIVED && DERIVED.key === key) return DERIVED;
   const rm = rangeMonths(), keys = rm.map(m=>m.key);
   const workDays = rm.reduce((s,m)=>s+m.work_days, 0);
+  /* เดือนที่ข้อมูลยังไม่ครบ ให้ทอนยอดการันตีตามสัดส่วนวันที่มีข้อมูลจริง */
+  const gRatio = {};
+  rm.forEach(m=>{ gRatio[m.key] = m.full_days ? m.work_days / m.full_days : 1; });
   const lastYM = rm.length ? rm[rm.length-1].year*12 + rm[rm.length-1].month : 0;
 
   const trucks = [], allow = {};
   for (const t of D.trucks){
     if (!canSee(t)) continue;
     let score = 0, qty = 0, cost = 0, gBase = 0, movePen = 0;
-    let movedQ = 0, addedQ = 0, addedC = 0, nSpare = 0;
+    let movedQ = 0, addedQ = 0, addedC = 0, nSpare = 0, gFull = 0;
     let gMissing = false, hit = false, zero = false;
     const zr = [], mpr = [], days = {}, rmk = {}, qd = {}, tdd = {};
     for (const k of keys){
@@ -1404,7 +1407,8 @@ function derive(){
       for (const d in mv.d) score += mv.d[d];
       qty += mv.q; cost += mv.c;
       const isT012 = t.fleet === "T012" && t.gt_ym != null && t.gt_ym >= lastYM;
-      gBase += isT012 ? mv.gt : mv.gb;
+      gBase += (isT012 ? mv.gt : mv.gb) * (gRatio[k] || 1);
+      gFull += (isT012 ? mv.gt : mv.gb);
       movePen += mv.mp || 0;
       movedQ += mv.q0 || 0; addedQ += mv.aq || 0; addedC += mv.ac || 0;
       if (mv.nsp) nSpare = mv.nsp;
@@ -1439,7 +1443,8 @@ function derive(){
       qty:+qty.toFixed(2), revenue,
       inc_rate:incRate, base_rate:tier.inc, incentive,
       zero, zreason: zr.join(" / "),
-      g_base:spare ? 0 : gBase, g_pct:spare ? 0 : tier.gpct, g_amount:gAmount, g_topup:gTopup,
+      g_base:spare ? 0 : +gBase.toFixed(2), g_full:spare ? 0 : +gFull.toFixed(2),
+      g_pct:spare ? 0 : tier.gpct, g_amount:gAmount, g_topup:gTopup,
       penalty, penalty_note: mpr.join(" | "),
       net:+(incentive + gTopup - penalty).toFixed(2)
     });
@@ -2017,6 +2022,7 @@ function vReward(root){
   root.appendChild(hintBox(
     `%TA = คะแนนรวม ÷ วันทำงาน ${nf(der.workDays,0)} วัน (${rangeLabel()}) · เงินรางวัล = อัตราตามกลุ่ม × คิวรวม · `+
     `ส่วนต่างการันตี = ยอดการันตีตามกลุ่ม − รายได้ค่าขนส่งจริง (ถ้ารายได้เกินการันตี = 0) · `+
+    `เดือนที่ข้อมูลยังไม่ครบ ยอดการันตีจะถูกทอนตามสัดส่วนวันที่มีข้อมูล · `+
     `หักไม่โยก/ย้ายโรงงาน = 1,000 บาทต่อครั้ง · รถเสริมไม่มีสิทธิ์ได้เงินรางวัลและการันตี`));
   const list = sortBy(trucks(), SORT.reward);
   if(!list.length){ root.appendChild(el("div","empty",emptyMsg("รถ"))); return; }
@@ -2071,8 +2077,10 @@ function vReward(root){
     const inc = el("td","n"+(x.incentive<0?" neg":""),nf(x.incentive));
     if(x.zero) inc.title = rate.title;
     tr.appendChild(inc);
-    const gb = el("td","n", x.g_missing? "—" : nf(x.g_base,0));
+    const gb = el("td","n", x.g_missing? "—" : nf(x.g_base,2));
     if(x.g_missing) gb.title = "ไม่พบโรงงานนี้ในชีตการันตี";
+    else if(x.g_full && Math.abs(x.g_full - x.g_base) > 0.005)
+      gb.title = `การันตีเต็มเดือน ${nf(x.g_full,2)} บาท ทอนตามวันที่มีข้อมูลจริง`;
     tr.appendChild(gb);
     tr.appendChild(el("td","n",nf(x.g_pct,1)+"%"));
     tr.appendChild(el("td","n",nf(x.g_amount)));
@@ -2333,6 +2341,9 @@ function vRules(root){
     <ul style="margin:6px 0 0;padding-left:20px">
       <li><b>รถจดทะเบียน</b> — ค่าเดิมในไฟล์ที่เป็น บัญชี1 / บัญชีหลัก / รถหลัก
           คิดคะแนนและรางวัลตามปกติทุกหัวข้อ</li>
+      <li>ยอดการันตีของเดือนที่ข้อมูลยังไม่ครบ จะถูกทอนตามสัดส่วน
+          <b>วันที่มีข้อมูล ÷ วันทำงานเต็มเดือน</b> เช่น การันตี 80,000 บาท
+          เดือนมีวันทำงาน 30 วัน แต่ข้อมูลมีถึงวันที่ 28 จะเหลือ (80,000÷30)×28 = 74,666.67 บาท</li>
       <li><b>รถเสริม</b> — ค่าเดิมในไฟล์ที่เป็น บัญชี2 / รถสำรอง
           คิดคะแนนวันทำงานและการหักเงินทุกหัวข้อเหมือนรถจดทะเบียน
           แต่<b>ไม่มีสิทธิ์ได้เงินรางวัลและการันตี</b>แม้จะได้ TA 1–TA 3
