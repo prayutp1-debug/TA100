@@ -183,12 +183,12 @@ body.locked header, body.locked .wrap{display:none !important}
 .eye:hover{color:var(--ink);background:#eef2fb}
 .eye:focus-visible{outline:2px solid var(--link);outline-offset:1px}
 .eye svg{width:19px;height:19px;display:block}
-#pwmodal{position:fixed;inset:0;z-index:160;display:flex;align-items:center;justify-content:center;
+#fgmodal,#pwmodal{position:fixed;inset:0;z-index:160;display:flex;align-items:center;justify-content:center;
   background:rgba(15,23,42,.5);padding:18px}
-#pwmodal .box{background:#fff;border-radius:16px;padding:22px 22px 18px;max-width:392px;width:100%;
+#fgmodal .box,#pwmodal .box{background:#fff;border-radius:16px;padding:22px 22px 18px;max-width:392px;width:100%;
   box-shadow:0 20px 50px rgba(15,23,42,.32)}
-#pwmodal h3{margin:0 0 4px;font-size:18px;font-weight:700}
-#pwmodal .sub{margin:0 0 16px;font-size:12.5px;color:var(--ink-3);line-height:1.6}
+#fgmodal h3,#pwmodal h3{margin:0 0 4px;font-size:18px;font-weight:700}
+#fgmodal .sub,#pwmodal .sub{margin:0 0 16px;font-size:12.5px;color:var(--ink-3);line-height:1.6}
 .pwbtns{display:flex;gap:9px;margin-top:14px}
 .pwbtns .btn{flex:1;padding:11px}
 .pwbtns .btn-primary{flex:1.6}
@@ -219,10 +219,26 @@ body.locked header, body.locked .wrap{display:none !important}
       <span style="font-size:12px;color:var(--ink-3)" id="userStat">กำลังโหลดรายชื่อผู้ใช้…</span>
     </div>
     <button class="btn-primary" id="loginBtn" type="submit">เข้าสู่ระบบ</button>
-    <button type="button" class="linkbtn" id="pwOpenLogin">เปลี่ยนรหัสผ่าน</button>
+    <div style="display:flex;gap:14px;justify-content:center;margin-top:11px">
+      <button type="button" class="linkbtn" id="pwOpenLogin" style="margin:0">เปลี่ยนรหัสผ่าน</button>
+      <button type="button" class="linkbtn" id="fgOpen" style="margin:0">ลืมรหัสผ่าน</button>
+    </div>
     <div class="msg" id="loginMsg"></div>
   </form>
 </div>
+
+<div id="fgmodal" hidden><div class="box">
+  <h3>ลืมรหัสผ่าน</h3>
+  <p class="sub">กรอกชื่อผู้ใช้ ระบบจะส่งรหัสผ่านไปที่อีเมลที่บันทึกไว้ในกูเกิลชีต User</p>
+  <div class="f2"><label for="fgUser">ผู้ใช้งาน</label>
+    <input id="fgUser" type="text" autocomplete="username" placeholder="รหัส Vendor หรือชื่อผู้ใช้">
+    <div class="hint2" id="fgHint"></div></div>
+  <div class="msg" id="fgMsg"></div>
+  <div class="pwbtns">
+    <button type="button" class="btn" id="fgCancel">ยกเลิก</button>
+    <button type="button" class="btn-primary" id="fgSend">ส่งรหัสผ่านไปที่อีเมล</button>
+  </div>
+</div></div>
 
 <div id="pwmodal" hidden><div class="box">
   <h3>เปลี่ยนรหัสผ่าน</h3>
@@ -1091,7 +1107,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 44;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 46;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -1100,9 +1116,9 @@ let LAST_JSON = null;
 let XLSX_URL = XLSX_CANDIDATES[0];
 let D = null, DETAIL = null, TAB = "overview", SRC = {};
 const F = {m1:"",m2:"",gb:"vendor",division:"",dept:"",sect:"",plant:"",vendor:"",tier:"",q:""};
-const PAGE = {overview:1,summary:1,summaryPlant:1,score:1,reward:1,fine:1,detail:1};
-const SORT = {summary:{k:"net",d:-1},summaryPlant:{k:"net",d:-1},score:{k:"truck",d:1},reward:{k:"net",d:-1},fine:{k:"total",d:-1},detail:{k:"day",d:1}};
-const PER = {summary:200,summaryPlant:200,score:60,reward:80,fine:60,detail:200};
+const PAGE = {overview:1,summary:1,summaryPlant:1,score:1,scoreDay:1,reward:1,fine:1,detail:1};
+const SORT = {summary:{k:"net",d:-1},summaryPlant:{k:"net",d:-1},score:{k:"truck",d:1},scoreDay:{k:"truck",d:1},reward:{k:"net",d:-1},fine:{k:"total",d:-1},detail:{k:"day",d:1}};
+const PER = {summary:200,summaryPlant:200,score:60,scoreDay:60,reward:80,fine:60,detail:200};
 const PER0 = Object.assign({},PER);
 const $ = s => document.querySelector(s);
 const el = (t,c,x) => {const e=document.createElement(t); if(c)e.className=c; if(x!=null)e.textContent=x; return e;};
@@ -1302,7 +1318,7 @@ async function load(opts){
 }
 
 const TABS = [
-  ["overview","ภาพรวม"],["summary","สรุปโครงการ"],["summaryPlant","สรุปโครงการ-รายโรงงาน"],["score","คะแนนรายวัน"],["reward","คำนวณรางวัล"],
+  ["overview","ภาพรวม"],["summary","สรุปโครงการ"],["summaryPlant","สรุปโครงการ-รายโรงงาน"],["score","คะแนนรายวัน"],["scoreDay","คะแนนวันทำงาน"],["reward","คำนวณรางวัล"],
   ["fine","หักเงิน จบส."],["detail","รายละเอียด Punch"],["rules","เกณฑ์คะแนน"]
 ];
 
@@ -1390,7 +1406,15 @@ function tierOf(pct){
 function derive(){
   const key = F.m1+"→"+F.m2;
   if (DERIVED && DERIVED.key === key) return DERIVED;
-  const rm = rangeMonths(), keys = rm.map(m=>m.key);
+  DERIVED = computeRange(rangeMonths());
+  DERIVED.key = key;
+  return DERIVED;
+}
+function deriveFor(keys){
+  return computeRange(MONTHS.filter(m=>keys.indexOf(m.key) >= 0));
+}
+function computeRange(rm){
+  const keys = rm.map(m=>m.key);
   const workDays = rm.reduce((s,m)=>s+m.work_days, 0);
   /* เดือนที่ข้อมูลยังไม่ครบ ให้ทอนยอดการันตีตามสัดส่วนวันที่มีข้อมูลจริง */
   const gRatio = {};
@@ -1474,8 +1498,7 @@ function derive(){
   const cols = [];
   rm.forEach(m=>{ for(let d=1; d<=m.days_in_month; d++) cols.push({ym:m.key, day:d, label:m.label}); });
 
-  DERIVED = {key, months:rm, keys, workDays, trucks, drivers, cols, allow};
-  return DERIVED;
+  return {months:rm, keys, workDays, trucks, drivers, cols, allow};
 }
 
 /* ── ตัวกรอง ───────────────────────────────────────────────── */
@@ -1639,7 +1662,7 @@ function render(){
   $("#filters").hidden = (TAB==="rules");
   const gw = $("#f-gb-wrap"); if(gw) gw.hidden = (TAB!=="summary");
   const v = $("#view"); v.innerHTML="";
-  ({overview:vOverview,summary:vSummary,summaryPlant:vSummary,score:vScore,reward:vReward,fine:vFine,detail:vDetail,rules:vRules}[TAB])(v);
+  ({overview:vOverview,summary:vSummary,summaryPlant:vSummary,score:vScore,scoreDay:vScore,reward:vReward,fine:vFine,detail:vDetail,rules:vRules}[TAB])(v);
 }
 
 /* ── 1. ภาพรวม ────────────────────────────────────────────── */
@@ -1780,6 +1803,42 @@ function vOverview(root){
   p2.style.gridColumn="1 / -1";
   g.appendChild(p2);
 
+  /* 1d-2. สรุปรายเดือน + กราฟเปรียบเทียบ */
+  const MON_COLS = [["incentive","รางวัล Incentive"],["guarantee","การันตี"],
+                    ["deduct","รายการหัก"],["fine","หักเงิน จบส."],["net","คงเหลือรางวัลสุทธิ"]];
+  const MON_COLOR = {incentive:"#10b981", guarantee:"#2563eb", deduct:"#f97316",
+                     fine:"#a855f7", net:"#4338ca"};
+  const monRows = derive().months.map(m=>{
+    const o = summaryRows(GB.month, [m.key])[0] ||
+              {incentive:0,guarantee:0,deduct:0,fine:0,net:0};
+    return Object.assign({label:thMonth(m), key:m.key}, o);
+  });
+  if (monRows.length){
+    const mt = el("table");
+    mt.innerHTML = `<thead><tr><th>เดือน</th>` +
+      MON_COLS.map(([,l])=>`<th class="n">${l} (บาท)</th>`).join("") + `</tr></thead>`;
+    const mb = el("tbody");
+    monRows.forEach(o=>{
+      const tr3 = el("tr");
+      tr3.innerHTML = `<td>${esc(o.label)}</td>` +
+        MON_COLS.map(([k])=>`<td class="n ${o[k]<0?"neg":""}">${nf(o[k],2)}</td>`).join("");
+      mb.appendChild(tr3);
+    });
+    if (monRows.length > 1){
+      const tt = {}; MON_COLS.forEach(([k])=>tt[k]=monRows.reduce((s2,o)=>s2+o[k],0));
+      const tr4 = el("tr"); tr4.style.fontWeight="600"; tr4.style.background="#eef2fb";
+      tr4.innerHTML = `<td>รวม</td>` +
+        MON_COLS.map(([k])=>`<td class="n ${tt[k]<0?"neg":""}">${nf(tt[k],2)}</td>`).join("");
+      mb.appendChild(tr4);
+    }
+    mt.appendChild(mb);
+    const pm = panel("สรุปรางวัลรายเดือน", rangeLabelTH(), mt);
+    pm.querySelector(".scroll").style.maxHeight = "none";
+    pm.appendChild(monthChart(monRows, MON_COLS, MON_COLOR));
+    pm.style.gridColumn = "1 / -1";
+    g.appendChild(pm);
+  }
+
   /* 1e. รถที่ต้องตามแก้ */
   const worst = sortBy(t,{k:"pct",d:1}).slice(0,15);
   const wt = el("table");
@@ -1845,6 +1904,7 @@ const GB = {
                                   ["cc","Cost Center-VC",14],
                                   ["vendor_id","Vendor",11],["vendor","บริษัทคู่ธุรกิจ",28]],
             key:x=>(x.division||"")+"|"+(x.plant_no||"")+"|"+(x.vendor_id||"")},
+  month:   {name:"เดือน", cols:[["_m","เดือน",14]], key:()=>"_"},
   vendor:  {name:"ผู้รับเหมา", cols:[["division","กิจการ",16],["vendor_id","Vendor",11],
                                       ["vendor","บริษัทคู่ธุรกิจ",30]],
             key:x=>(x.division||"")+"|"+(x.vendor_id||"")}
@@ -1861,12 +1921,14 @@ const SUM_COLS = [
 
 /** รวมยอดตามกลุ่มที่เลือก */
 const curGB = ()=> TAB === "summaryPlant" ? GB.plantv : (GB[F.gb] || GB.vendor);
-function summaryRows(gOverride){
+function summaryRows(gOverride, onlyKeys){
   const g = gOverride || curGB();
+  const limit = onlyKeys ? new Set(onlyKeys) : null;
   const map = {};
   const blank = ()=>({reg:0,spare:0,qty:0,revenue:0,ta1:0,ta2:0,ta3:0,ta4:0,ta5:0,ta6:0,
                       incentive:0,guarantee:0,deduct:0,pen:0,fineAmt:0,fine:0,net:0,note:""});
-  trucks().forEach(x=>{
+  const scope = limit ? deriveFor(onlyKeys) : null;
+  (scope ? scope.trucks.filter(x=>matchOrg(x)&&(!F.tier||x.tier===F.tier)) : trucks()).forEach(x=>{
     const k = g.key(x);
     const o = map[k] || (map[k] = Object.assign(blank(), {_k:k}, pick(x, g.cols)));
     if (x.spare) o.spare++; else o.reg++;
@@ -1875,7 +1937,7 @@ function summaryRows(gOverride){
     o.incentive += x.incentive; o.guarantee += x.g_topup;
     o.pen += x.penalty;
   });
-  drivers().forEach(d=>{
+  (scope ? scope.drivers.filter(x=>matchOrg(x)) : drivers()).forEach(d=>{
     const k = g.key(d);
     const o = map[k]; if (!o) return;
     o.fineAmt += d.total;
@@ -1950,15 +2012,69 @@ function vSummary(root){
     `${n0(list.length)} รายการ · ${rangeLabelTH()}`, tb, pager(TB,list.length,PER[TB])));
 }
 
+/** กราฟแท่งเปรียบเทียบค่าใช้จ่ายรายเดือน พร้อมตัวเลขกำกับ */
+function monthChart(rows, cols, colors){
+  const W = Math.max(560, rows.length * cols.length * 62 + 90), H = 290;
+  const PADL = 58, PADR = 14, PADT = 26, PADB = 54;
+  const vals = [];
+  rows.forEach(o=>cols.forEach(([k])=>vals.push(o[k])));
+  const hi = Math.max(0, ...vals), lo = Math.min(0, ...vals);
+  const span = (hi - lo) || 1;
+  const y = v => PADT + (hi - v) / span * (H - PADT - PADB);
+  const gw = (W - PADL - PADR) / rows.length;
+  const bw = Math.min(42, (gw - 16) / cols.length);
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg","svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("width","100%"); svg.style.maxWidth = W+"px"; svg.style.height="auto";
+  const mk = (tag,attrs,text)=>{
+    const e = document.createElementNS("http://www.w3.org/2000/svg",tag);
+    for(const a in attrs) e.setAttribute(a, attrs[a]);
+    if(text!=null) e.textContent = text;
+    svg.appendChild(e); return e;
+  };
+  // เส้นศูนย์
+  mk("line",{x1:PADL-6,y1:y(0),x2:W-PADR,y2:y(0),stroke:"#94a3b8","stroke-width":1});
+  mk("text",{x:PADL-10,y:y(0)+4,"text-anchor":"end","font-size":11,fill:"#64748b"},"0");
+
+  rows.forEach((o,ri)=>{
+    const x0 = PADL + ri*gw + (gw - bw*cols.length)/2;
+    cols.forEach(([k,l],ci)=>{
+      const v = o[k], x = x0 + ci*bw;
+      const top = y(Math.max(0,v)), bot = y(Math.min(0,v));
+      mk("rect",{x:x+2, y:top, width:bw-4, height:Math.max(1,bot-top),
+                 fill:colors[k], rx:2, opacity:.92}).appendChild(
+        document.createElementNS("http://www.w3.org/2000/svg","title")).textContent =
+        `${o.label} · ${l} = ${nf(v,2)} บาท`;
+      mk("text",{x:x+bw/2, y: v>=0 ? top-5 : bot+13, "text-anchor":"middle",
+                 "font-size":10, fill: v<0 ? "#e11d48" : "#334155"}, n0(v));
+    });
+    mk("text",{x:PADL + ri*gw + gw/2, y:H-30, "text-anchor":"middle",
+               "font-size":12, fill:"#17203d", "font-weight":"600"}, o.label);
+  });
+
+  const box = el("div"); box.style.padding = "8px 13px 2px"; box.style.overflowX = "auto";
+  box.appendChild(svg);
+  const lg = el("div","legend");
+  cols.forEach(([k,l])=>{
+    const sp = el("span"); const sw = el("i","sw"); sw.style.background = colors[k];
+    sp.appendChild(sw); sp.appendChild(el("b",null,l)); lg.appendChild(sp);
+  });
+  box.appendChild(lg);
+  return box;
+}
+
 /* ── 2. คะแนนรายวัน ───────────────────────────────────────── */
 function vScore(root){
   const der = derive(), cols = der.cols, multi = der.months.length > 1;
+  const TB = TAB, showScore = (TAB === "scoreDay");
   kpiStrip(trucks());
-  root.appendChild(hintBox(
-    "แต่ละช่องแสดง คิว/เที่ยว ของรถในวันนั้น · สีพื้นคือคะแนนที่ได้ (เขียว = 1 เต็ม, แดง = 0) · ช่องว่างคือวันที่ไม่มีการ Punch · ช่องที่มีสามเหลี่ยมมุมขวาบนคือมีการหักคะแนน วางเมาส์เพื่อดูคะแนนและสาเหตุทั้งหมดของวันนั้น"));
-  const list = sortBy(trucks(), SORT.score);
+  root.appendChild(hintBox(showScore
+    ? "แต่ละช่องแสดงคะแนนที่ได้ของวันนั้น (เต็ม 1 คะแนน/วัน) · ช่องว่างคือวันที่ไม่มีการ Punch · ช่องที่มีสามเหลี่ยมมุมขวาบนคือมีการหักคะแนน วางเมาส์เพื่อดูสาเหตุทั้งหมด"
+    : "แต่ละช่องแสดง คิว/เที่ยว ของรถในวันนั้น · สีพื้นคือคะแนนที่ได้ (เขียว = 1 เต็ม, แดง = 0) · ช่องว่างคือวันที่ไม่มีการ Punch · ช่องที่มีสามเหลี่ยมมุมขวาบนคือมีการหักคะแนน วางเมาส์เพื่อดูคะแนนและสาเหตุทั้งหมดของวันนั้น"));
+  const list = sortBy(trucks(), SORT[TB]);
   if(!list.length){ root.appendChild(el("div","empty",emptyMsg("รถ"))); return; }
-  const page = slice(list,"score");
+  const page = slice(list,TB);
 
   const tb = el("table"); const thead = el("thead");
   if (multi){
@@ -1971,13 +2087,13 @@ function vScore(root){
     thead.appendChild(hr0);
   }
   const hr = el("tr");
-  const th0 = headSort(el("th",null,"เบอร์รถ"),"score","truck");
+  const th0 = headSort(el("th",null,"เบอร์รถ"),TB,"truck");
   th0.className += " sticky-l"; hr.appendChild(th0);
-  ORG.forEach(([k,l])=> hr.appendChild(headSort(el("th",null,l),"score",k)));
+  ORG.forEach(([k,l])=> hr.appendChild(headSort(el("th",null,l),TB,k)));
   cols.forEach(c=>{ const th = el("th","c n",String(c.day)); if(multi) th.title = c.label; hr.appendChild(th); });
-  hr.appendChild(headSort(el("th","n","รวม"),"score","score"));
-  hr.appendChild(headSort(el("th","n","%TA"),"score","pct"));
-  hr.appendChild(headSort(el("th","c","กลุ่ม"),"score","tier"));
+  hr.appendChild(headSort(el("th","n","รวม"),TB,"score"));
+  hr.appendChild(headSort(el("th","n","%TA"),TB,"pct"));
+  hr.appendChild(headSort(el("th","c","กลุ่ม"),TB,"tier"));
   thead.appendChild(hr); tb.appendChild(thead);
   if (multi) tb.classList.add("two-head");
 
@@ -1988,11 +2104,14 @@ function vScore(root){
     ORG.forEach(([k])=>tr.appendChild(orgTd(x[k])));
     cols.forEach(c=>{
       const dm = x.days[c.ym], v = dm ? dm[c.day] : undefined;
-      const td = el("td","d qt");
+      const td = el("td", showScore ? "d" : "d qt");
       if(v!=null){
-        td.className = "d qt "+cls(v);
-        const qq = x.qd[c.ym] && x.qd[c.ym][c.day], tp = x.td[c.ym] && x.td[c.ym][c.day];
-        td.textContent = nf(qq||0,2) + "/" + n0(tp||0);
+        td.className = (showScore ? "d " : "d qt ") + cls(v);
+        if (showScore) td.textContent = nf(v,2);
+        else {
+          const qq = x.qd[c.ym] && x.qd[c.ym][c.day], tp = x.td[c.ym] && x.td[c.ym][c.day];
+          td.textContent = nf(qq||0,2) + "/" + n0(tp||0);
+        }
         const rm = x.rmk[c.ym] && x.rmk[c.ym][c.day];
         if(rm){
           td.className += " mk";
@@ -2009,8 +2128,8 @@ function vScore(root){
   });
   tb.appendChild(tbody);
 
-  const p = panel("คะแนนวันทำงานรายคัน",
-    `${n0(list.length)} คัน · ${rangeLabel()}`, tb, pager("score",list.length,PER.score));
+  const p = panel(showScore ? "คะแนนวันทำงานรายคัน" : "คิว/เที่ยว รายคัน",
+    `${n0(list.length)} คัน · ${rangeLabel()}`, tb, pager(TB,list.length,PER[TB]));
   const lg = el("div","legend");
   [["1.00","--s100"],["0.75","--s75"],["0.50","--s50"],["0.25","--s25"],["0","--s0"]].forEach(([tx,c])=>{
     const s = el("span"); const sw=el("i","sw"); sw.style.background=`var(${c})`;
@@ -2515,6 +2634,24 @@ function sheetSpec(){
                     : {l, t:fmtT[t]||"money", w:w||14, f:x=>x[k], sum:true}))
     };
   }
+  if (TAB === "scoreDay"){
+    return {name:"คะแนนวันทำงาน", rows:sortBy(trucks(), SORT.scoreDay), freeze:1, cols:[
+      {l:"เบอร์รถ", t:"text", w:10, f:x=>x.truck},
+      ...ORG.map(([k,l])=>({l, t:"str", w:16, f:x=>x[k]||""})),
+      ...cols.map((c,i)=>({l:dayHead[i], t:"score", w:6, align:"center",
+        f:x=>{ const dm=x.days[c.ym]; return dm && dm[c.day]!=null ? dm[c.day] : ""; },
+        fill:v=>(v===""?null:XC.score[v] || XC.score[0]),
+        note:x=>{
+          const rm = x.rmk[c.ym] && x.rmk[c.ym][c.day];
+          if (!rm) return "";
+          const dm = x.days[c.ym], v = dm ? dm[c.day] : null;
+          return fitLines(`รถ ${x.truck} · ${c.label} วันที่ ${c.day} = ${nf(v,2)} คะแนน`, rm);
+        }})),
+      {l:"คะแนนรวม", t:"num2", w:11, f:x=>x.score},
+      {l:"%TA", t:"pct", w:9, f:x=>x.pct},
+      {l:"กลุ่ม TA", t:"str", w:9, align:"center", f:x=>x.tier, tier:true}
+    ]};
+  }
   if (TAB === "score" || TAB === "overview"){
     return {name:"คะแนนรายวัน", rows:sortBy(trucks(), SORT.score), freeze:1, cols:[
       {l:"เบอร์รถ", t:"text", w:10, f:x=>x.truck},
@@ -2771,6 +2908,7 @@ function rowsToUsers(rows){
   if(!rows||!rows.length) return null;
   var head = rows[0].map(function(h){ return normKey(h); });
   var iN=head.indexOf('name'), iU=head.indexOf('user'), iP=head.indexOf('password'), iS=head.indexOf('status');
+  var iE=head.indexOf('email'); if(iE<0) iE=head.indexOf('e-mail'); if(iE<0) iE=head.indexOf('mail');
   if(iU<0||iP<0) return null;
   var out=[];
   for(var r=1;r<rows.length;++r){
@@ -3022,6 +3160,58 @@ function resetEyes(ids){
   });
 }
 
+/* ── ลืมรหัสผ่าน ───────────────────────────────────────────── */
+function maskMail(e){
+  e = String(e||"");
+  var at = e.indexOf("@"); if (at < 1) return e;
+  var n = e.slice(0,at), d = e.slice(at);
+  return (n.length <= 2 ? n[0]+"*" : n.slice(0,2) + "*".repeat(Math.max(1,n.length-2))) + d;
+}
+function fgMsg(t,cls){ var m=gid('fgMsg'); m.className='msg'+(cls?' '+cls:''); m.textContent=t||''; if(!t) m.style.display='none'; }
+function openForgot(){
+  gid('fgUser').value = gid('u').value.trim();
+  fgMsg('','');
+  gid('fgmodal').hidden = false;
+  fgHintUpdate();
+  setTimeout(function(){ gid('fgUser').focus(); }, 50);
+}
+function findUser(u){
+  return USERS.filter(function(x){ return normUser(x.user) === normUser(u); })[0];
+}
+function fgHintUpdate(){
+  var u = gid('fgUser').value.trim();
+  if (!u) return hint('fgHint','');
+  var hit = findUser(u);
+  if (!hit) return hint('fgHint','ไม่พบชื่อผู้ใช้นี้ในระบบ','bad');
+  if (!hit.email) return hint('fgHint','ผู้ใช้นี้ยังไม่ได้บันทึกอีเมลไว้ในกูเกิลชีต','bad');
+  hint('fgHint','จะส่งไปที่ ' + maskMail(hit.email),'ok');
+}
+function sendForgot(){
+  var u = gid('fgUser').value.trim();
+  if (!u){ fgMsg('กรุณากรอกชื่อผู้ใช้','err'); return; }
+  var hit = findUser(u);
+  if (hit && !hit.email){ fgMsg('ผู้ใช้นี้ยังไม่ได้บันทึกอีเมลไว้ในกูเกิลชีต กรุณาติดต่อผู้ดูแล','err'); return; }
+  if (!API_URL){ fgMsg('ยังไม่ได้ตั้งค่า API_URL จึงส่งอีเมลไม่ได้','err'); return; }
+  gid('fgSend').disabled = true; gid('fgSend').textContent = 'กำลังส่ง…';
+  fgMsg('กำลังส่งอีเมล…','info');
+  api({action:'forgotPassword', user:u}).then(function(res){
+    gid('fgSend').disabled = false; gid('fgSend').textContent = 'ส่งรหัสผ่านไปที่อีเมล';
+    if (res && res.ok){
+      fgMsg('ส่งรหัสผ่านไปที่ ' + maskMail(res.email || (hit&&hit.email) || '') + ' เรียบร้อยแล้ว','info');
+      setTimeout(function(){ gid('fgmodal').hidden = true; }, 3000);
+    } else if (res && res.message){
+      fgMsg(res.message,'err');
+    } else {
+      fgMsg('เซิร์ฟเวอร์ยังไม่รองรับคำสั่งส่งอีเมล (action=forgotPassword) ' +
+            'กรุณาเพิ่มคำสั่งนี้ใน Apps Script' +
+            (hit && hit.email ? ' — อีเมลของผู้ใช้นี้คือ ' + maskMail(hit.email) : ''),'err');
+    }
+  }).catch(function(err){
+    gid('fgSend').disabled = false; gid('fgSend').textContent = 'ส่งรหัสผ่านไปที่อีเมล';
+    fgMsg('เชื่อมต่อ Apps Script ไม่ได้ (' + err.message + ')','err');
+  });
+}
+
 /* ── เริ่มระบบ ─────────────────────────────────────────────── */
 function authBoot(){
   document.body.classList.add('locked');
@@ -3050,6 +3240,11 @@ function authBoot(){
     });
   });
   gid('pwOpenLogin').addEventListener('click',openPw);
+  gid('fgOpen').addEventListener('click',openForgot);
+  gid('fgCancel').addEventListener('click',function(){ gid('fgmodal').hidden = true; });
+  gid('fgSend').addEventListener('click',sendForgot);
+  gid('fgUser').addEventListener('input',fgHintUpdate);
+  gid('fgmodal').addEventListener('click',function(e){ if(e.target===this) this.hidden = true; });
   gid('pwCancel').addEventListener('click',function(){ gid('pwmodal').hidden = true; });
   gid('pwSave').addEventListener('click',savePw);
   gid('pwmodal').addEventListener('click',function(e){ if(e.target===this) this.hidden = true; });
