@@ -317,7 +317,7 @@ var READ_OPTS = {type:"array", cellDates:false, cellText:false, cellNF:false, de
                  sheets:["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch"]};
 var AOA_OPTS  = {header:1, raw:true, defval:null};
 
-var ENGINE_VERSION = 33;
+var ENGINE_VERSION = 35;
 
 var TA_TIERS = [
   {name:"TA 1", min:95, inc: 6, gpct:1.000},
@@ -328,6 +328,7 @@ var TA_TIERS = [
   {name:"TA 6", min:-1, inc:-6, gpct:0}
 ];
 var LATE_GRACE_MIN = 30;   // กรณี Punch in ปกติ: check_time ต้องไม่เกินเวลาเข้างานโรงงาน + 30 นาที
+var REST_HOURS     = 13;   // สิทธิ์พักของคนขับ นับจากดีพีใบสุดท้ายของวันก่อน
 
 var MONTH_EN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -474,7 +475,7 @@ function buildDB(sheets, report){
       iInRmk = col(P,"punch_in_adj_remark"), iOutRmk = col(P,"punch_out_adj_remark"),
       iCheck = col(P,"check_time"), iPlant = col(P,"plant_no"),
       iQty = col(P,"dp_dispatch_qty"), iCost = col(P,"partialtcost"),
-      iTrip = col(P,"ดีพีในวัน"),
+      iTrip = col(P,"ดีพีในวัน"), iPrev = col(P, null, "ดีพีใบสุดท้ายวันก่อน"),
       iDiv = col(P,"division_name"), iDept = col(P,"dept_name"), iSect = col(P,"sect_name"),
       iPlantN = col(P,"plant_name"), iVid = col(P,"vendor_id"), iVn = col(P,"vendor_name");
   if (iDate < 0 || iTruck < 0) throw new Error("ชีต Punch ไม่มีคอลัมน์ work_date หรือ truck_no");
@@ -772,13 +773,27 @@ function buildDB(sheets, report){
       var pi = plantIn[plantNo]; if (pi == null) pi = 8*3600;
       var deadline = day*86400 + pi + LATE_GRACE_MIN*60;
       if (Math.floor((day*86400 + ct)/60) > Math.floor(deadline/60)){
-        if (LATE_RMK_RE.test(inRmk)){
-          // หมายเหตุยืนยันว่าตรวจรถสายจริง
+        var edited = (devIn === "W" || devOut === "W");
+        var hasReason = !blankRemark(inRmk) && !LATE_RMK_RE.test(inRmk);
+        if (edited && hasReason){
+          /* โรงงานแก้ไขให้ (device = W) และระบุเหตุผลไว้ — ไม่หักคะแนน */
+          lateFixed = true; ctStat = "plant_ok";
+        } else if (!edited && hasReason){
+          /* Punch ด้วย SDA ทั้งสองฝั่ง แต่โรงงานระบุเหตุผลเพิ่มให้
+             ใช้สิทธิ์พัก REST_HOURS ชม. จากดีพีใบสุดท้ายของวันก่อนมาเทียบแทน */
+          var prev = timeSecs(cell(p,iPrev));
+          var rest = (prev == null) ? -1 : ((day-1)*86400 + prev + REST_HOURS*3600);
+          var dl2 = Math.max(deadline, rest);
+          if (Math.floor((day*86400 + ct)/60) > Math.floor(dl2/60)){
+            dCt = DED_LATE; ctStat = "late_shift";
+            note = "ตรวจรถหลังพักครบ " + REST_HOURS + " ชม. (ได้ถึง " +
+                   hhmm(dl2 % 86400) + " แต่ตรวจรถ " + hhmm(ct) + ")";
+          } else {
+            lateFixed = true; ctStat = "rest_ok";
+          }
+        } else {
           dCt = DED_LATE; ctStat = "late_shift";
           note = "ตรวจรถเกิน " + LATE_GRACE_MIN + " นาทีไม่ทันเวลาเข้างาน";
-        } else {
-          // ไม่ระบุเหตุผล หรือระบุเหตุผลอื่น (งานดึก / ระบบขัดข้อง ฯลฯ) = โรงงานแก้ไขเป็นปกติ
-          lateFixed = true; ctStat = "plant_ok";
         }
       }
     }
@@ -1037,7 +1052,7 @@ function buildDB(sheets, report){
     meta: {
       months: months,
       generated: new Date().toISOString().slice(0,16).replace("T"," "),
-      punch_rows: detail.length, late_grace: LATE_GRACE_MIN,
+      punch_rows: detail.length, late_grace: LATE_GRACE_MIN, rest_hours: REST_HOURS,
       engine: ENGINE_VERSION,
       has_driver: iDrv >= 0,
       has_device_out: iDevOut >= 0
@@ -1120,7 +1135,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 47;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 49;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -2332,7 +2347,8 @@ function vDetail(root){
   const CT = {on_time:"ตรวจตรงเวลา",late_shift:"ตรวจรถสาย (เกินเวลาเข้างาน+30 น.)",
               skip_late:"ไม่คิดซ้ำ (หักมาสายไปแล้ว)",no_check:"ไม่ตรวจรถทั้งวัน",
               plant_fix:"โรงงานขอแก้ไข (ไม่หักคะแนน)",
-              plant_ok:"ตรวจรถสายแต่โรงงานแก้ไขเป็นปกติ"};
+              plant_ok:"ตรวจรถสายแต่โรงงานแก้ไขเป็นปกติ",
+              rest_ok:"ตรวจรถสายแต่ยังอยู่ในสิทธิ์พัก 13 ชม."};
   const cols = [];
   if (multi) cols.push(["ym","เดือน","c"]);
   cols.push(["day","วันที่","c"],["plant_no","รหัสโรงงาน","t"],["plant_name","ชื่อโรงงาน","t"],["truck","truck_no","t"],
@@ -2470,9 +2486,13 @@ function vRules(root){
     <ul style="margin:6px 0 0;padding-left:20px">
       <li>ช่อง punch_in_adj_remark ระบุว่า <b>“ไม่ตรวจสภาพรถเกินเวลาเข้างาน 30 นาที”</b>
           → หัก 0.25 ถือว่ามาสาย</li>
-      <li>ช่องว่าง หรือระบุเหตุผลอื่น (เช่น งานดึก, ระบบเสีย, ระบบขัดข้อง)
-          → <b>ไม่หักคะแนนเลย</b> ถือว่าโรงงานแก้ไขให้เป็นปกติ
-          และไม่หักเรื่องไม่ใช้ SDA ด้วยแม้ device_in จะเป็น W</li>
+      <li><b>โรงงานแก้ไขให้</b> (device_in หรือ device_out เป็น W)
+          <b>และระบุเหตุผลไว้</b> (เช่น เลิกดึก, ระบบขัดข้อง, ระบบคำนวณ)
+          → ไม่หักคะแนนเลย และไม่หักเรื่องไม่ใช้ SDA ด้วย</li>
+      <li><b>Punch ด้วย SDA ทั้งสองฝั่ง (device = M) แต่โรงงานระบุเหตุผลเพิ่มให้</b>
+          → เทียบ check_time กับ<b>ดีพีใบสุดท้ายของวันก่อน + ${m.rest_hours||13} ชม.</b>
+          (สิทธิ์พักของคนขับ) ถ้ายังไม่เกินก็ไม่หัก ถ้าเกินหัก 0.25</li>
+      <li>นอกนั้น — ไม่ระบุเหตุผล หรือระบุว่า “ปกติ” จุด ขีด เคาะ → หัก 0.25 ตามเกณฑ์</li>
     </ul>
 
     <p style="margin:14px 0 0"><b>ประเภทรถ (ช่อง “รถบัญชี” ในชีตจดทะเบียน)</b></p>
@@ -2750,7 +2770,8 @@ function sheetSpec(){
     const CT = {on_time:"ตรวจตรงเวลา",late_shift:"ตรวจรถสาย (เกินเวลาเข้างาน+30 น.)",
                 skip_late:"ไม่คิดซ้ำ (หักมาสายไปแล้ว)",no_check:"ไม่ตรวจรถทั้งวัน",
               plant_fix:"โรงงานขอแก้ไข (ไม่หักคะแนน)",
-              plant_ok:"ตรวจรถสายแต่โรงงานแก้ไขเป็นปกติ"};
+              plant_ok:"ตรวจรถสายแต่โรงงานแก้ไขเป็นปกติ",
+              rest_ok:"ตรวจรถสายแต่ยังอยู่ในสิทธิ์พัก 13 ชม."};
     const at = k=>(r=>r[I[k]]);
     return {name:"รายละเอียด Punch", rows, freeze:0, cols:[
       {l:"เดือน", t:"str", w:9, align:"center", f:at("ym")},
