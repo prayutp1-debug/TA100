@@ -283,7 +283,7 @@ body.locked header, body.locked .wrap{display:none !important}
     <button id="btn-logout" title="ออกจากระบบ">ออกจากระบบ</button>
     <button id="btn-reload" title="อ่านไฟล์ Excel จาก GitHub ใหม่ ไม่ใช้ข้อมูลที่จำไว้">โหลดข้อมูลใหม่</button>
     <button id="btn-pick" title="ทดลองกับไฟล์ในเครื่องก่อนอัปขึ้น GitHub">ใช้ไฟล์ Excel อื่น</button>
-    <button id="btn-json" title="อัปไฟล์นี้ขึ้น repo แล้วทุกคนจะเปิด Dashboard ได้ใน 1-2 วินาที">บันทึก TA100.json</button>
+    <button id="btn-json" title="ได้ไฟล์บีบอัด TA100.json.gz — อัปขึ้น repo แล้วทุกคนจะเปิด Dashboard ได้ใน 1-2 วินาที">บันทึกไฟล์ข้อมูล</button>
     <input type="file" id="file-input" accept=".xlsx,.xlsm" hidden>
   </div>
   <div class="kpis" id="kpis"></div>
@@ -317,7 +317,7 @@ var READ_OPTS = {type:"array", cellDates:false, cellText:false, cellNF:false, de
                  sheets:["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch"]};
 var AOA_OPTS  = {header:1, raw:true, defval:null};
 
-var ENGINE_VERSION = 35;
+var ENGINE_VERSION = 36;
 
 var TA_TIERS = [
   {name:"TA 1", min:95, inc: 6, gpct:1.000},
@@ -1047,12 +1047,39 @@ function buildDB(sheets, report){
             plant_no:o.plant_no, plant:o.plant, vendor_id:o.vendor_id, vendor:o.vendor, m:m};
   });
 
-  report("จัดรูปแบบผลลัพธ์", .95);
+  /* ลดขนาดไฟล์: ข้อความหมายเหตุซ้ำกันมาก เก็บไว้ตารางเดียวแล้วอ้างด้วยหมายเลข
+     และตัดชื่อโรงงานออกจากรายแถว (หาได้จากรหัสโรงงาน) */
+  report("ย่อขนาดข้อมูล", .96);
+  var RTAB = [], RIDX = {};
+  function rid(t){
+    if (!t) return -1;
+    var i = RIDX[t];
+    if (i === undefined){ i = RTAB.length; RTAB.push(t); RIDX[t] = i; }
+    return i;
+  }
+  var iRemark = 20, iPlantName = 3;   // ตำแหน่งในแถว detail
+  for (var z1=0; z1<detail.length; z1++){
+    detail[z1][iRemark] = rid(detail[z1][iRemark]);
+    detail[z1][iPlantName] = 0;
+  }
+  var PLANTS = {};
+  trucks.forEach(function(t){ if (t.plant_no) PLANTS[t.plant_no] = t.plant; });
+  drivers.forEach(function(d){ if (d.plant_no && !PLANTS[d.plant_no]) PLANTS[d.plant_no] = d.plant; });
+  trucks.forEach(function(t){
+    for (var k in t.m){
+      var r = t.m[k].r, o = {};
+      for (var d2 in r) o[d2] = rid(r[d2]);
+      t.m[k].r = o;
+    }
+  });
+
+  report("จัดรูปแบบผลลัพธ์", .97);
   return {
     meta: {
       months: months,
       generated: new Date().toISOString().slice(0,16).replace("T"," "),
       punch_rows: detail.length, late_grace: LATE_GRACE_MIN, rest_hours: REST_HOURS,
+      plants: PLANTS,
       engine: ENGINE_VERSION,
       has_driver: iDrv >= 0,
       has_device_out: iDevOut >= 0
@@ -1064,6 +1091,7 @@ function buildDB(sheets, report){
     trucks: trucks,
     drivers: drivers,
     detail: {
+      rtab: RTAB,
       cols: ["ym","day","plant_no","plant_name","truck","driver","device_in","device_out",
              "pin","punch_in_time","pout","punch_out_time",
              "ct_stat","check_time","d_in","d_dev","d_devout","d_out","d_ct","net","remark"],
@@ -1135,11 +1163,11 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 49;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 51;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
-const JSON_CANDIDATES = ["data/TA100.json", "TA100.json"];
+const JSON_CANDIDATES = ["data/TA100.json.gz", "TA100.json.gz", "data/TA100.json", "TA100.json"];
 let LAST_JSON = null;
 let XLSX_URL = XLSX_CANDIDATES[0];
 let D = null, DETAIL = null, TAB = "overview", SRC = {};
@@ -1225,7 +1253,7 @@ function computeFrom(source){
 /* ตรวจว่าไฟล์ที่จำเป็นอยู่ครบไหม — ใช้ตอนเกิดปัญหา */
 async function diagnose(){
   const out = [];
-  for (const f of ["index.html", ...XLSX_CANDIDATES]){
+  for (const f of ["index.html", ...XLSX_CANDIDATES, ...JSON_CANDIDATES]){
     let ok = false;
     try { const r = await fetch(f, {method:"HEAD", cache:"no-cache"}); ok = r.ok; } catch(e){}
     out.push(`<div>${ok?"✓":"✗"} <code>${esc(f)}</code>${ok?"":" — ไม่พบไฟล์นี้"}</div>`);
@@ -1299,9 +1327,13 @@ async function load(opts){
       for (const jp of JSON_CANDIDATES){
         try {
           stage("กำลังโหลดไฟล์ข้อมูลสำเร็จรูป", .2);
+          const gz = /\.gz$/.test(jp);
+          if (gz && !window.DecompressionStream) continue;
           const r = await fetch(jp, {cache:"no-cache"});
           if (!r.ok) continue;
-          const txt = await r.text();
+          const txt = gz
+            ? await new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).text()
+            : await r.text();
           const db = JSON.parse(txt);
           const size = db && db.meta ? db.meta.src_size : null;
           if (srcLen && size && size !== srcLen){
@@ -1359,9 +1391,31 @@ function canSee(x){
   return !!x.vendor && !!SESSION.name && normKey(x.vendor) === normKey(SESSION.name);
 }
 
+function expand(db){
+  const t = db.detail && db.detail.rtab;
+  if (!t) return db;                       // ไฟล์รุ่นเก่าที่ยังไม่ได้ย่อ
+  const I = {}; db.detail.cols.forEach((c,i)=>I[c]=i);
+  const P = db.meta.plants || {};
+  const rows = db.detail.rows;
+  for (let i=0;i<rows.length;i++){
+    const r = rows[i];
+    r[I.remark] = t[r[I.remark]] || "";
+    r[I.plant_name] = P[r[I.plant_no]] || "";
+  }
+  db.trucks.forEach(x=>{
+    for (const k in x.m){
+      const r = x.m[k].r, o = {};
+      for (const d in r) o[d] = t[r[d]] || "";
+      x.m[k].r = o;
+    }
+  });
+  delete db.detail.rtab;
+  return db;
+}
+
 function boot(db, cached){
   const first = !D;
-  D = db;
+  D = expand(db);
   DETAIL = D.detail;
   DETAIL.idx = {}; DETAIL.cols.forEach((c,i)=>DETAIL.idx[c]=i);
   DETAIL.org = {}; D.trucks.forEach(t=>DETAIL.org[t.truck]=t);
@@ -1378,12 +1432,29 @@ function boot(db, cached){
     $("#btn-pw").onclick = openPw;
     $("#btn-logout").onclick = ()=>{ localStorage.removeItem(LS_KEY); location.reload(); };
     $("#file-input").onchange = e=>{ if(e.target.files[0]) load({file:e.target.files[0]}); };
-    $("#btn-json").onclick = ()=>{
+    $("#btn-json").onclick = async ()=>{
       if (!LAST_JSON){ alert("ยังไม่มีข้อมูลให้บันทึก"); return; }
+      const btn = $("#btn-json"), old = btn.textContent;
+      btn.disabled = true; btn.textContent = "กำลังบีบอัด…";
+      let blob, name;
+      try {
+        if (window.CompressionStream){
+          const st = new Blob([LAST_JSON]).stream().pipeThrough(new CompressionStream("gzip"));
+          blob = await new Response(st).blob();
+          name = "TA100.json.gz";
+        } else {
+          blob = new Blob([LAST_JSON], {type:"application/json"});
+          name = "TA100.json";
+        }
+      } catch(e){
+        blob = new Blob([LAST_JSON], {type:"application/json"});
+        name = "TA100.json";
+      }
+      btn.disabled = false; btn.textContent = old;
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([LAST_JSON], {type:"application/json"}));
-      a.download = "TA100.json"; a.click();
-      setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+      a.href = URL.createObjectURL(blob);
+      a.download = name; a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
     };
   }
 
