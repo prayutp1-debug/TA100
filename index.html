@@ -190,6 +190,26 @@ body.locked header, body.locked .wrap{display:none !important}
 #fgmodal h3,#pwmodal h3{margin:0 0 4px;font-size:18px;font-weight:700}
 #fgmodal .sub,#pwmodal .sub{margin:0 0 16px;font-size:12.5px;color:var(--ink-3);line-height:1.6}
 .pwbtns{display:flex;gap:9px;margin-top:14px}
+.btn-ghost{flex:1;background:#fff;border:1px solid var(--rule);border-radius:10px;padding:11px;
+  cursor:pointer;color:#334155}
+.btn-ghost:hover{background:#f6f8ff;border-color:var(--link);color:var(--link)}
+.btn-ghost[disabled]{opacity:.6;cursor:not-allowed}
+#fgmodal{z-index:170}
+#fgmodal .maillist{margin:8px 0 0;padding:9px 11px;background:#f6f8ff;border:1px solid var(--rule);
+  border-radius:10px;font-size:13px;line-height:1.9;word-break:break-all}
+#fgmodal .maillist a{color:var(--link);text-decoration:none}
+#fgmodal .maillist a:hover{text-decoration:underline}
+#fgmodal .warn{margin-top:11px;font-size:12.5px;color:#92400e;background:#fef3c7;
+  border-radius:9px;padding:9px 11px;line-height:1.7}
+#fgmodal .who{font-size:13.5px;line-height:1.8}
+#fgmodal .who b{font-size:15px}
+#fgmodal .field{margin-bottom:13px}
+#fgmodal .field label{display:block;font-size:12.5px;color:var(--ink-3);margin-bottom:5px}
+#fgmodal input{width:100%;padding:11px 12px;border:1.5px solid var(--rule);border-radius:10px;outline:none}
+#fgmodal input:focus{border-color:var(--link);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.spin{width:30px;height:30px;border:3px solid #dbe4f7;border-top-color:var(--link);
+  border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
 .pwbtns .btn{flex:1;padding:11px}
 .pwbtns .btn-primary{flex:1.6}
 .chip{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:999px;
@@ -221,23 +241,16 @@ body.locked header, body.locked .wrap{display:none !important}
     <button class="btn-primary" id="loginBtn" type="submit">เข้าสู่ระบบ</button>
     <div style="display:flex;gap:14px;justify-content:center;margin-top:11px">
       <button type="button" class="linkbtn" id="pwOpenLogin" style="margin:0">เปลี่ยนรหัสผ่าน</button>
-      <button type="button" class="linkbtn" id="fgOpen" style="margin:0">ลืมรหัสผ่าน</button>
+      <button type="button" class="linkbtn" id="fgOpen" style="margin:0">ลืมรหัสผ่าน?</button>
     </div>
     <div class="msg" id="loginMsg"></div>
   </form>
 </div>
 
 <div id="fgmodal" hidden><div class="box">
-  <h3>ลืมรหัสผ่าน</h3>
-  <p class="sub">กรอกชื่อผู้ใช้ ระบบจะส่งรหัสผ่านไปที่อีเมลที่บันทึกไว้ในกูเกิลชีต User</p>
-  <div class="f2"><label for="fgUser">ผู้ใช้งาน</label>
-    <input id="fgUser" type="text" autocomplete="username" placeholder="รหัส Vendor หรือชื่อผู้ใช้">
-    <div class="hint2" id="fgHint"></div></div>
-  <div class="msg" id="fgMsg"></div>
-  <div class="pwbtns">
-    <button type="button" class="btn" id="fgCancel">ยกเลิก</button>
-    <button type="button" class="btn-primary" id="fgSend">ส่งรหัสผ่านไปที่อีเมล</button>
-  </div>
+  <h3 id="fgTitle">ลืมรหัสผ่าน</h3>
+  <div id="fgBody"></div>
+  <div class="pwbtns" id="fgBtns"></div>
 </div></div>
 
 <div id="pwmodal" hidden><div class="box">
@@ -1107,7 +1120,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 46;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 47;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -3160,55 +3173,126 @@ function resetEyes(ids){
   });
 }
 
-/* ── ลืมรหัสผ่าน ───────────────────────────────────────────── */
-function maskMail(e){
-  e = String(e||"");
-  var at = e.indexOf("@"); if (at < 1) return e;
-  var n = e.slice(0,at), d = e.slice(at);
-  return (n.length <= 2 ? n[0]+"*" : n.slice(0,2) + "*".repeat(Math.max(1,n.length-2))) + d;
+/* ── ลืมรหัสผ่าน: popup 3 ขั้น (ค้นอีเมล -> ยืนยัน -> ตั้งรหัสใหม่และส่ง) ── */
+var CF_USER = '';
+function cfOpen(){ gid('fgmodal').hidden = false; }
+function cfClose(){ gid('fgmodal').hidden = true; }
+function cfRender(title, body, btns){
+  gid('fgTitle').textContent = title;
+  gid('fgBody').innerHTML = body;
+  gid('fgBtns').innerHTML = btns.map(function(b){
+    return '<button type="button" class="'+b[2]+'" id="'+b[0]+'"'+(b[3]||'')+'>'+esc(b[1])+'</button>';
+  }).join('');
 }
-function fgMsg(t,cls){ var m=gid('fgMsg'); m.className='msg'+(cls?' '+cls:''); m.textContent=t||''; if(!t) m.style.display='none'; }
+function mailLinks(list){
+  if(!list || !list.length) return '<div class="maillist">(ไม่พบอีเมลที่บันทึกไว้)</div>';
+  return '<div class="maillist">'+list.map(function(e){
+    return '<div>• <a href="mailto:'+esc(e)+'">'+esc(e)+'</a></div>';
+  }).join('')+'</div>';
+}
+/* แปลง error จาก Apps Script ให้เป็นคำแนะนำที่ทำตามได้ */
+function apiHint(msg){
+  msg = String(msg||'');
+  if(/send_mail|ไม่ได้รับอนุญาต|not authorized|Authorization/i.test(msg)){
+    return 'สคริปต์ยังไม่ได้รับสิทธิ์ส่งอีเมล แก้ได้โดย: เปิด Apps Script → เลือกฟังก์ชัน <b>authorizeMail</b> → กด Run → ' +
+           'Review permissions → Allow (ต้องมีหัวข้อ "ส่งอีเมลในชื่อของคุณ") → จากนั้น Deploy → <b>New version</b>';
+  }
+  if(/protected|permission|edit/i.test(msg)){
+    return 'ตรวจสอบว่าบัญชีที่ Deploy สคริปต์มีสิทธิ์แก้ไขกูเกิลชีต และคอลัมน์ Password ไม่ได้ถูกป้องกันไว้';
+  }
+  return '';
+}
+function cfWho(res, fallback){
+  return '<div class="who">ผู้ใช้งาน: <b>'+esc(res.name||res.account||fallback)+'</b>'+
+         (res.account?(' ('+esc(res.account)+')'):'')+'</div>';
+}
 function openForgot(){
-  gid('fgUser').value = gid('u').value.trim();
-  fgMsg('','');
-  gid('fgmodal').hidden = false;
-  fgHintUpdate();
-  setTimeout(function(){ gid('fgUser').focus(); }, 50);
+  CF_USER = gid('u').value.trim();
+  cfOpen();
+  if(!API_URL){
+    cfRender('ลืมรหัสผ่าน','<div class="msg err" style="display:block">ยังไม่ได้ตั้งค่า API_URL ในไฟล์ index.html จึงยังใช้งานไม่ได้</div>',
+      [['cfCancel','ปิด','btn-primary',' style="flex:1"']]);
+    gid('cfCancel').addEventListener('click',cfClose);
+    return;
+  }
+  if(CF_USER) cfLookup(CF_USER); else cfAskUser('');
 }
-function findUser(u){
-  return USERS.filter(function(x){ return normUser(x.user) === normUser(u); })[0];
+/* ยังไม่ได้กรอกชื่อผู้ใช้ที่หน้า login — ให้กรอกใน popup */
+function cfAskUser(err){
+  cfRender('ลืมรหัสผ่าน',
+    '<p class="sub">กรอกชื่อผู้ใช้งาน ระบบจะแสดงอีเมลที่บันทึกไว้ให้ยืนยันก่อน แล้วจึงตั้งรหัสผ่านใหม่และส่งไปให้</p>'+
+    '<div class="field"><label for="cfUser">ผู้ใช้งาน (รหัส Vendor หรือชื่อผู้ใช้)</label><input id="cfUser" type="text" autocomplete="username"></div>'+
+    (err?('<div class="msg err" style="display:block">'+esc(err)+'</div>'):''),
+    [['cfCancel','ยกเลิก','btn-ghost'],['cfNext','ตรวจสอบอีเมล','btn-primary']]);
+  gid('cfUser').value = CF_USER;
+  gid('cfCancel').addEventListener('click',cfClose);
+  gid('cfNext').addEventListener('click',function(){
+    var u = gid('cfUser').value.trim();
+    if(!u){ cfAskUser('กรุณากรอกชื่อผู้ใช้งาน'); return; }
+    CF_USER = u; cfLookup(u);
+  });
+  gid('cfUser').addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); gid('cfNext').click(); } });
+  setTimeout(function(){ gid('cfUser').focus(); },60);
 }
-function fgHintUpdate(){
-  var u = gid('fgUser').value.trim();
-  if (!u) return hint('fgHint','');
-  var hit = findUser(u);
-  if (!hit) return hint('fgHint','ไม่พบชื่อผู้ใช้นี้ในระบบ','bad');
-  if (!hit.email) return hint('fgHint','ผู้ใช้นี้ยังไม่ได้บันทึกอีเมลไว้ในกูเกิลชีต','bad');
-  hint('fgHint','จะส่งไปที่ ' + maskMail(hit.email),'ok');
+/* ขั้นที่ 1 — อ่านอีเมลที่บันทึกไว้ (ยังไม่เปลี่ยนรหัส ยังไม่ส่งอีเมล) */
+function cfLookup(u){
+  cfRender('ลืมรหัสผ่าน','<div style="display:flex;align-items:center;gap:11px;padding:6px 0">'+
+    '<div class="spin"></div><div style="font-size:13.5px;color:var(--ink-3)">กำลังค้นหาอีเมลที่บันทึกไว้ของ '+esc(u)+'…</div></div>',
+    [['cfCancel','ยกเลิก','btn-ghost',' style="flex:1"']]);
+  gid('cfCancel').addEventListener('click',cfClose);
+  api({action:'lookupUser',user:u}).then(function(res){
+    if(!res||!res.ok){ cfAskUser((res&&res.message)||'ตรวจสอบข้อมูลไม่สำเร็จ'); return; }
+    cfConfirm(res);
+  }).catch(function(err){
+    cfAskUser('เรียก Apps Script ไม่ได้ ('+err.message+') — ตรวจสอบว่า Deploy เวอร์ชันล่าสุดแล้ว');
+  });
 }
-function sendForgot(){
-  var u = gid('fgUser').value.trim();
-  if (!u){ fgMsg('กรุณากรอกชื่อผู้ใช้','err'); return; }
-  var hit = findUser(u);
-  if (hit && !hit.email){ fgMsg('ผู้ใช้นี้ยังไม่ได้บันทึกอีเมลไว้ในกูเกิลชีต กรุณาติดต่อผู้ดูแล','err'); return; }
-  if (!API_URL){ fgMsg('ยังไม่ได้ตั้งค่า API_URL จึงส่งอีเมลไม่ได้','err'); return; }
-  gid('fgSend').disabled = true; gid('fgSend').textContent = 'กำลังส่ง…';
-  fgMsg('กำลังส่งอีเมล…','info');
-  api({action:'forgotPassword', user:u}).then(function(res){
-    gid('fgSend').disabled = false; gid('fgSend').textContent = 'ส่งรหัสผ่านไปที่อีเมล';
-    if (res && res.ok){
-      fgMsg('ส่งรหัสผ่านไปที่ ' + maskMail(res.email || (hit&&hit.email) || '') + ' เรียบร้อยแล้ว','info');
-      setTimeout(function(){ gid('fgmodal').hidden = true; }, 3000);
-    } else if (res && res.message){
-      fgMsg(res.message,'err');
-    } else {
-      fgMsg('เซิร์ฟเวอร์ยังไม่รองรับคำสั่งส่งอีเมล (action=forgotPassword) ' +
-            'กรุณาเพิ่มคำสั่งนี้ใน Apps Script' +
-            (hit && hit.email ? ' — อีเมลของผู้ใช้นี้คือ ' + maskMail(hit.email) : ''),'err');
+/* ขั้นที่ 2 — แสดงข้อมูลให้ยืนยัน */
+function cfConfirm(res){
+  var list = (res.emails && res.emails.length) ? res.emails : (res.masked||[]);
+  cfRender('ยืนยันการตั้งรหัสผ่านใหม่',
+    cfWho(res,CF_USER)+
+    '<div style="margin-top:9px;font-size:13.5px">ส่งรหัสผ่านใหม่ไปที่อีเมลที่บันทึกไว้ '+n0(res.count||list.length)+' อีเมล:</div>'+
+    mailLinks(list)+
+    '<div class="warn">เมื่อกดยืนยัน ระบบจะตั้งรหัสผ่านใหม่ให้ทันที <b>รหัสผ่านเดิมจะใช้ไม่ได้อีก</b> '+
+    'และมีผลกับทุกเว็บแอปที่ใช้บัญชีชุดนี้</div>',
+    [['cfCancel','ยกเลิก','btn-ghost'],['cfOk','ยืนยัน','btn-primary']]);
+  gid('cfCancel').addEventListener('click',cfClose);
+  gid('cfOk').addEventListener('click',function(){ cfDoReset(res); });
+}
+/* ขั้นที่ 3 — ตั้งรหัสใหม่ เขียนลงชีต แล้วส่งอีเมล */
+function cfDoReset(info){
+  var ok = gid('cfOk'), cancel = gid('cfCancel');
+  ok.disabled = true; ok.textContent = 'กำลังดำเนินการ…'; if(cancel) cancel.disabled = true;
+  api({action:'forgotPassword',user:CF_USER}).then(function(res){
+    if(!res||!res.ok){
+      ok.disabled=false; ok.textContent='ยืนยัน'; if(cancel) cancel.disabled=false;
+      var m = (res&&res.message)||'ตั้งรหัสผ่านใหม่ไม่สำเร็จ', h = apiHint(m);
+      gid('fgBody').innerHTML += '<div class="msg err" style="display:block;margin-top:11px">'+esc(m)+'</div>'+
+        (h?('<div style="margin-top:8px;font-size:12px;color:var(--ink-3);line-height:1.7">'+h+'</div>'):'');
+      return;
+    }
+    var list = (res.emails && res.emails.length) ? res.emails : (res.masked||(info&&info.emails)||[]);
+    cfRender('ตั้งรหัสผ่านใหม่เรียบร้อย',
+      cfWho(res.account?res:(info||{}),CF_USER)+
+      '<div style="margin-top:9px;font-size:13.5px">ส่งรหัสผ่านใหม่ไปที่อีเมลที่บันทึกไว้ '+n0(res.count||list.length)+' อีเมลแล้ว:</div>'+
+      mailLinks(list)+
+      '<div class="warn">รหัสผ่านเดิมใช้ไม่ได้แล้ว เข้าสู่ระบบด้วยรหัสใหม่ในอีเมล แล้วกด "เปลี่ยนรหัสผ่าน" เพื่อตั้งรหัสที่จำได้เอง'+
+      '<br>ถ้าไม่พบอีเมลภายใน 2–3 นาที ลองตรวจในกล่อง Junk/Spam</div>',
+      [['cfDone','ปิด','btn-primary',' style="flex:1"']]);
+    gid('cfDone').addEventListener('click',cfClose);
+    var saved = localStorage.getItem(LS_KEY);
+    if(saved){
+      try{
+        var o = JSON.parse(decodeURIComponent(escape(atob(saved))));
+        if(normUser(o.u) === normUser(CF_USER)){
+          localStorage.removeItem(LS_KEY); gid('p').value=''; gid('remember').checked=false;
+        }
+      }catch(e){}
     }
   }).catch(function(err){
-    gid('fgSend').disabled = false; gid('fgSend').textContent = 'ส่งรหัสผ่านไปที่อีเมล';
-    fgMsg('เชื่อมต่อ Apps Script ไม่ได้ (' + err.message + ')','err');
+    ok.disabled=false; ok.textContent='ยืนยัน'; if(cancel) cancel.disabled=false;
+    gid('fgBody').innerHTML += '<div class="msg err" style="display:block;margin-top:11px">เรียก Apps Script ไม่ได้ ('+esc(err.message)+')</div>';
   });
 }
 
@@ -3241,10 +3325,7 @@ function authBoot(){
   });
   gid('pwOpenLogin').addEventListener('click',openPw);
   gid('fgOpen').addEventListener('click',openForgot);
-  gid('fgCancel').addEventListener('click',function(){ gid('fgmodal').hidden = true; });
-  gid('fgSend').addEventListener('click',sendForgot);
-  gid('fgUser').addEventListener('input',fgHintUpdate);
-  gid('fgmodal').addEventListener('click',function(e){ if(e.target===this) this.hidden = true; });
+  gid('fgmodal').addEventListener('click',function(e){ if(e.target===this) cfClose(); });
   gid('pwCancel').addEventListener('click',function(){ gid('pwmodal').hidden = true; });
   gid('pwSave').addEventListener('click',savePw);
   gid('pwmodal').addEventListener('click',function(e){ if(e.target===this) this.hidden = true; });
