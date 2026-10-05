@@ -281,7 +281,7 @@ body.locked header, body.locked .wrap{display:none !important}
     <span class="chip" id="roleChip"></span>
     <button id="btn-pw" title="เปลี่ยนรหัสผ่านที่ใช้เข้าสู่ระบบ">เปลี่ยนรหัสผ่าน</button>
     <button id="btn-logout" title="ออกจากระบบ">ออกจากระบบ</button>
-    <button id="btn-reload" title="อ่านไฟล์ Excel จาก GitHub ใหม่ ไม่ใช้ข้อมูลที่จำไว้">โหลดข้อมูลใหม่</button>
+    <button id="btn-reload" title="อ่านข้อมูลใหม่ ไม่ใช้ข้อมูลที่จำไว้ในเบราว์เซอร์">โหลดข้อมูลใหม่</button>
     <button id="btn-pick" title="ทดลองกับไฟล์ในเครื่องก่อนอัปขึ้น GitHub">ใช้ไฟล์ Excel อื่น</button>
     <button id="btn-json" title="ได้ไฟล์บีบอัด TA100.json.gz — อัปขึ้น repo แล้วทุกคนจะเปิด Dashboard ได้ใน 1-2 วินาที">บันทึกไฟล์ข้อมูล</button>
     <input type="file" id="file-input" accept=".xlsx,.xlsm" hidden>
@@ -317,7 +317,7 @@ var READ_OPTS = {type:"array", cellDates:false, cellText:false, cellNF:false, de
                  sheets:["Punch","จดทะเบียน","การันตี","เวลาทำงาน","วันทำงาน","คะแนน-Punch"]};
 var AOA_OPTS  = {header:1, raw:true, defval:null};
 
-var ENGINE_VERSION = 36;
+var ENGINE_VERSION = 37;
 
 var TA_TIERS = [
   {name:"TA 1", min:95, inc: 6, gpct:1.000},
@@ -1047,31 +1047,11 @@ function buildDB(sheets, report){
             plant_no:o.plant_no, plant:o.plant, vendor_id:o.vendor_id, vendor:o.vendor, m:m};
   });
 
-  /* ลดขนาดไฟล์: ข้อความหมายเหตุซ้ำกันมาก เก็บไว้ตารางเดียวแล้วอ้างด้วยหมายเลข
-     และตัดชื่อโรงงานออกจากรายแถว (หาได้จากรหัสโรงงาน) */
-  report("ย่อขนาดข้อมูล", .96);
-  var RTAB = [], RIDX = {};
-  function rid(t){
-    if (!t) return -1;
-    var i = RIDX[t];
-    if (i === undefined){ i = RTAB.length; RTAB.push(t); RIDX[t] = i; }
-    return i;
-  }
-  var iRemark = 20, iPlantName = 3;   // ตำแหน่งในแถว detail
-  for (var z1=0; z1<detail.length; z1++){
-    detail[z1][iRemark] = rid(detail[z1][iRemark]);
-    detail[z1][iPlantName] = 0;
-  }
+  /* เก็บชื่อโรงงานไว้ให้ค้นได้ (ข้อความหมายเหตุเก็บเต็มในแต่ละแถว ไม่ย่อ
+     เพราะ gzip บีบได้ดีอยู่แล้ว และทำให้ไฟล์ใช้ได้กับ index.html ทุกเวอร์ชัน) */
   var PLANTS = {};
   trucks.forEach(function(t){ if (t.plant_no) PLANTS[t.plant_no] = t.plant; });
   drivers.forEach(function(d){ if (d.plant_no && !PLANTS[d.plant_no]) PLANTS[d.plant_no] = d.plant; });
-  trucks.forEach(function(t){
-    for (var k in t.m){
-      var r = t.m[k].r, o = {};
-      for (var d2 in r) o[d2] = rid(r[d2]);
-      t.m[k].r = o;
-    }
-  });
 
   report("จัดรูปแบบผลลัพธ์", .97);
   return {
@@ -1091,7 +1071,6 @@ function buildDB(sheets, report){
     trucks: trucks,
     drivers: drivers,
     detail: {
-      rtab: RTAB,
       cols: ["ym","day","plant_no","plant_name","truck","driver","device_in","device_out",
              "pin","punch_in_time","pout","punch_out_time",
              "ct_stat","check_time","d_in","d_dev","d_devout","d_out","d_ct","net","remark"],
@@ -1163,7 +1142,7 @@ if (typeof WorkerGlobalScope !== "undefined" && typeof self !== "undefined"
 </script>
 <script>
 "use strict";
-const APP_VERSION = 51;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
+const APP_VERSION = 53;   // เพิ่มเลขนี้เมื่อแก้เกณฑ์ เพื่อล้างผลคำนวณเก่าที่จำไว้
 // ฐานข้อมูล — วางไฟล์ไว้ที่ไหนก็ได้ในสองตำแหน่งนี้ อัปเดตเดือนใหม่แค่แทนที่ไฟล์
 const XLSX_CANDIDATES = ["data/TA100.xlsx", "TA100.xlsx"];
 // ไฟล์ผลคำนวณสำเร็จรูป — ถ้ามีและตรงกับไฟล์ Excel ปัจจุบัน จะโหลดแทน (เร็วกว่าราว 10 เท่า)
@@ -1312,7 +1291,7 @@ async function load(opts){
         break;
       } catch(e){ /* บางที่ไม่รองรับ HEAD — ลองตำแหน่งถัดไป */ }
     }
-    if (!found) XLSX_URL = XLSX_CANDIDATES[0];
+    if (!found){ XLSX_URL = XLSX_CANDIDATES[0]; key = null; }
 
     if (key && !opts.force){
       stage("อ่านผลที่คำนวณไว้แล้ว", .5);
@@ -1322,8 +1301,9 @@ async function load(opts){
       } catch(e){}
     }
 
-    /* ไฟล์ JSON สำเร็จรูป — ใช้ได้ถ้าสร้างจากไฟล์ Excel ขนาดเดียวกัน */
-    if (!opts.force){
+    /* ไฟล์ JSON สำเร็จรูป — ใช้ได้ถ้าสร้างจากไฟล์ Excel ขนาดเดียวกัน
+       ถ้าไม่มีไฟล์ Excel ใน repo เลย ก็ใช้ไฟล์นี้เสมอ แม้ผู้ใช้กดโหลดใหม่ */
+    if (!opts.force || !found){
       for (const jp of JSON_CANDIDATES){
         try {
           stage("กำลังโหลดไฟล์ข้อมูลสำเร็จรูป", .2);
@@ -1341,7 +1321,7 @@ async function load(opts){
             continue;
           }
           LAST_JSON = txt;
-          if (key) cachePut(key, txt).catch(()=>{});
+          if (key && !opts.force) cachePut(key, txt).catch(()=>{});
           SRC.json = jp;
           boot(db, false);
           return;
@@ -1391,9 +1371,10 @@ function canSee(x){
   return !!x.vendor && !!SESSION.name && normKey(x.vendor) === normKey(SESSION.name);
 }
 
+/* รองรับไฟล์ข้อมูลรุ่นที่เคยย่อข้อความไว้ (เวอร์ชัน 50–51) ให้คลายกลับได้ */
 function expand(db){
   const t = db.detail && db.detail.rtab;
-  if (!t) return db;                       // ไฟล์รุ่นเก่าที่ยังไม่ได้ย่อ
+  if (!t) return db;                       // ไฟล์ปกติที่เก็บข้อความเต็ม
   const I = {}; db.detail.cols.forEach((c,i)=>I[c]=i);
   const P = db.meta.plants || {};
   const rows = db.detail.rows;
